@@ -21,9 +21,8 @@ client.commands = new Collection();
 // 🔧 Initialize Discord Player & Extractor Bypass
 const player = new Player(client);
 
-player.extractors.register(YoutubeiExtractor, {
-  authentication: process.env.YOUTUBE_COOKIE?.trim() || "" 
-}).then(() => {
+// 🔧 Register Youtubei Extractor WITHOUT the broken auth block
+player.extractors.register(YoutubeiExtractor, {}).then(() => {
   console.log("✅ Youtubei Extractor loaded successfully.");
 }).catch(console.error);
 
@@ -32,8 +31,8 @@ player.events.on('playerStart', (queue, track) => {
     queue.metadata.channel.send(`▶️ Now playing: **${track.title}**`).catch(console.error);
 });
 
-// 🔧 Corrected ready event for discord.js v14
-client.once('ready', () => {
+// 🔧 Fix the deprecation warning while we are at it
+client.once('clientReady', () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
 });
 
