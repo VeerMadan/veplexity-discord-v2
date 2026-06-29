@@ -104,7 +104,13 @@ async function playNext(guildId) {
   const song = queue.songs.shift();
 
   try {
-    const stream = await play.stream(song.url, {
+    const info = await play.video_info(song.url);
+
+console.log("==========================");
+console.log(info.video_details);
+console.log("==========================");
+
+const stream = await play.stream(info.video_details.url, {
     discordPlayerCompatibility: false
 });
 
