@@ -59,12 +59,17 @@ export async function playSong(interaction, query) {
   }
 
   // 🔧 Switched back to YouTube by removing the SoundCloud override
-  const results = await play.search(query, {
+  console.log("Searching...");
+
+const results = await play.search(query, {
     limit: 1,
     source: {
         youtube: "video"
     }
 });
+
+console.log("Search Finished");
+console.log(results);
 
   if (!results.length) {
     return interaction.editReply({
