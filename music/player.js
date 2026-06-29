@@ -60,8 +60,11 @@ export async function playSong(interaction, query) {
 
   // 🔧 Switched back to YouTube by removing the SoundCloud override
   const results = await play.search(query, {
-    limit: 1
-  });
+    limit: 1,
+    source: {
+        youtube: "video"
+    }
+});
 
   if (!results.length) {
     return interaction.editReply({
@@ -96,7 +99,9 @@ async function playNext(guildId) {
   const song = queue.songs.shift();
 
   try {
-    const stream = await play.stream(song.url);
+    const stream = await play.stream(song.url, {
+    discordPlayerCompatibility: false
+});
 
     const resource = createAudioResource(stream.stream, {
       inputType: stream.type,
@@ -110,20 +115,20 @@ async function playNext(guildId) {
     const trackName = song.title || song.name;
     queue.textChannel.send(`▶️ Now playing: **${trackName}**`).catch(console.error);
 
-    queue.player.once(AudioPlayerStatus.Playing, () => {
-      console.log(`🎙️ Success: Audio packets are actively pushing to Discord!`);
-    });
+   queue.player.once(AudioPlayerStatus.Playing, () => {
+    console.log("✅ Playback started.");
+});
 
     // 🔧 Re-added the Idle listener so the queue actually moves to the next song!
     queue.player.once(AudioPlayerStatus.Idle, () => {
       playNext(guildId);
     });
 
-    queue.player.on('error', (error) => {
-      console.error('Audio Player Error:', error);
-      queue.textChannel.send('❌ An error occurred playing this track. Skipping...').catch(console.error);
-      playNext(guildId);
-    });
+   queue.player.on("error", (error) => {
+    console.error("=======================");
+    console.error(error);
+    console.error("=======================");
+});
 
   } catch (error) {
     console.error('Stream Extraction Error:', error);
