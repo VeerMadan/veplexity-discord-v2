@@ -1,4 +1,4 @@
-import play from 'play-dl';
+import { playSong } from "./player.js";
 
 class MusicManager {
 
@@ -20,7 +20,10 @@ class MusicManager {
         console.log("Voice Channel:", voiceChannel.name);
         console.log("Query:", query);
 
-        // We'll implement playback next.
+        await interaction.deferReply();
+
+        return playSong(interaction, query);
+
     }
 
 }
