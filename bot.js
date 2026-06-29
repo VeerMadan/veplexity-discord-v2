@@ -5,9 +5,9 @@ import dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
 
 import { Client, GatewayIntentBits, Collection } from 'discord.js';
+import { Player } from 'discord-player';
+import { YoutubeiExtractor } from 'discord-player-youtubei';
  
-
-
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -18,10 +18,19 @@ const client = new Client({
 
 client.commands = new Collection();
 
+// 🔧 Initialize Discord Player & Extractor Bypass
+const player = new Player(client);
 
+player.extractors.register(YoutubeiExtractor, {
+  authentication: process.env.YOUTUBE_COOKIE?.trim() || "" 
+}).then(() => {
+  console.log("✅ Youtubei Extractor loaded successfully.");
+}).catch(console.error);
 
-
-
+// 🔧 Listen for songs starting to send the "Now Playing" message automatically
+player.events.on('playerStart', (queue, track) => {
+    queue.metadata.channel.send(`▶️ Now playing: **${track.title}**`).catch(console.error);
+});
 
 // 🔧 Corrected ready event for discord.js v14
 client.once('ready', () => {
@@ -29,10 +38,6 @@ client.once('ready', () => {
 });
 
 client.on('interactionCreate', async (interaction) => {
-
-
-
-
   // Handle Slash Commands
   if (!interaction.isChatInputCommand()) return;
 
@@ -60,7 +65,6 @@ client.on('interactionCreate', async (interaction) => {
   }
 }
 });
-
 
 import fs from 'fs';
 import path from 'path';
@@ -108,9 +112,6 @@ app.listen(PORT, () => {
 
 // 🔧 BULLETPROOF LOGIN LOGIC
 console.log("🔄 Attempting to authenticate with Discord...");
-
-// 🔧 TURN ON DISCORD NETWORK LOGS
-client.on('debug', console.log);
 
 if (!process.env.DISCORD_TOKEN) {
   console.error("❌ CRITICAL ERROR: DISCORD_TOKEN is missing in Render Environment Variables!");

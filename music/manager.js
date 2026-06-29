@@ -3,9 +3,7 @@ import { playSong } from "./player.js";
 class MusicManager {
 
     async play(interaction) {
-
         console.log("========== PLAY REQUEST ==========");
-
         const voiceChannel = interaction.member.voice.channel;
 
         if (!voiceChannel) {
@@ -22,10 +20,9 @@ class MusicManager {
 
         await interaction.deferReply();
 
-        return playSong(interaction, query);
-
+        // 🔧 Pass the voiceChannel explicitly to the player
+        return playSong(interaction, query, voiceChannel);
     }
-
 }
 
 export default new MusicManager();
