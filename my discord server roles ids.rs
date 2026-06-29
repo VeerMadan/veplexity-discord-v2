@@ -1,0 +1,4 @@
+@Administraror = <@&1469048464330588210>
+@Senior Moderator = <@&1469048464330588209>
+@Moderator = <@&1469048464330588208>
+@Trial Moderator = <@&1469048464330588207>

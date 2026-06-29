@@ -1,0 +1,363 @@
+import 'dotenv/config';
+
+const APP_ID = process.env.DISCORD_CLIENT_ID;
+const TOKEN = process.env.DISCORD_TOKEN;
+const GUILD_ID = process.env.GUILD_ID;
+
+if (!APP_ID || !TOKEN || !GUILD_ID) {
+  throw new Error('Missing DISCORD_CLIENT_ID, DISCORD_TOKEN, or GUILD_ID');
+}
+
+const url = `https://discord.com/api/v10/applications/${APP_ID}/guilds/${GUILD_ID}/commands`;
+
+const PVC_RULES = [
+  { name: 'Joining private VC without permission', value: 'PVC1' },
+  { name: 'Not leaving when asked', value: 'PVC2' },
+  { name: 'Disturbing private conversation', value: 'PVC3' },
+  { name: 'Abusive or offensive language', value: 'PVC4' },
+  { name: 'Recording without consent', value: 'PVC5' },
+];
+
+const commands = [
+  {
+  type: 3,
+  name: 'rule',
+  required: true,
+  choices: [
+    { name: 'Joining without permission', value: 'PVC1' },
+    { name: 'Not leaving when asked', value: 'PVC2' },
+    { name: 'Disturbing conversation', value: 'PVC3' },
+    { name: 'Abusive language', value: 'PVC4' },
+    { name: 'Recording without consent', value: 'PVC5' },
+    { name: 'Other reason', value: 'OTHER' },
+  ],
+},
+{
+  type: 3,
+  name: 'reason',
+  description: 'Required if Other reason selected',
+  required: false,
+},
+  /* =====================
+     TEST
+  ===================== */
+  {
+    name: 'test',
+    description: 'Test if the bot is alive',
+    type: 1,
+  },
+
+  /* =====================
+     WARN (GENERAL)
+  ===================== */
+  {
+    name: 'warn',
+    description: 'Warn a user for violating server rules',
+    type: 1,
+    options: [
+      {
+        type: 6,
+        name: 'user',
+        description: 'User to warn',
+        required: true,
+      },
+      {
+        type: 3,
+        name: 'reason',
+        description: 'Reason for warning',
+        required: true,
+      },
+    ],
+  },
+
+  /* =====================
+     PVC WARN
+  ===================== */
+  {
+    name: 'pvc_warn',
+    description: 'Warn a user for Private VC guideline violations',
+    type: 1,
+    options: [
+      {
+        type: 6,
+        name: 'user',
+        description: 'User to warn',
+        required: true,
+      },
+      {
+        type: 3,
+        name: 'rule',
+        description: 'Private VC rule violated',
+        required: true,
+        choices: PVC_RULES,
+      },
+      {
+        type: 3,
+        name: 'note',
+        description: 'Optional moderator note',
+        required: false,
+      },
+    ],
+  },
+
+  /* =====================
+     KICK
+  ===================== */
+  {
+    name: 'kick',
+    description: 'Kick a user from the server',
+    type: 1,
+    options: [
+      {
+        type: 6,
+        name: 'user',
+        description: 'User to kick',
+        required: true,
+      },
+      {
+        type: 3,
+        name: 'reason',
+        description: 'Reason for kick',
+        required: true,
+      },
+    ],
+  },
+
+  /* =====================
+     TIMEOUT / MUTE
+  ===================== */
+  {
+    name: 'timeout',
+    description: 'Timeout (mute) a user',
+    type: 1,
+    options: [
+      {
+        type: 6,
+        name: 'user',
+        description: 'User to timeout',
+        required: true,
+      },
+      {
+        type: 3,
+        name: 'duration',
+        description: 'Duration (10m, 1h, 2d)',
+        required: true,
+      },
+      {
+        type: 3,
+        name: 'reason',
+        description: 'Reason for timeout',
+        required: true,
+      },
+    ],
+  },
+
+  /* =====================
+     BAN (GENERAL)
+  ===================== */
+  {
+    name: 'ban',
+    description: 'Ban a user for violating server rules',
+    type: 1,
+    options: [
+      {
+        type: 6,
+        name: 'user',
+        description: 'User to ban',
+        required: true,
+      },
+      {
+        type: 3,
+        name: 'reason',
+        description: 'Reason for ban',
+        required: true,
+      },
+    ],
+  },
+
+  /* =====================
+     PVC BAN
+  ===================== */
+  {
+    name: 'pvc_ban',
+    description: 'Ban a user for repeated Private VC violations',
+    type: 1,
+    options: [
+      {
+        type: 6,
+        name: 'user',
+        description: 'User to ban',
+        required: true,
+      },
+      {
+        type: 3,
+        name: 'rule',
+        description: 'Private VC rule violated',
+        required: true,
+        choices: PVC_RULES,
+      },
+      {
+        type: 3,
+        name: 'reason',
+        description: 'Additional context',
+        required: false,
+      },
+    ],
+  },
+
+  /* =====================
+     WARNINGS LOOKUP
+  ===================== */
+  {
+    name: 'warnings',
+    description: 'View warnings for a user',
+    type: 1,
+    options: [
+      {
+        type: 6,
+        name: 'user',
+        description: 'User to check',
+        required: true,
+      },
+    ],
+  },
+
+  /* =====================
+     CLEAR WARNINGS
+  ===================== */
+  {
+    name: 'clearwarnings',
+    description: 'Clear all warnings for a user',
+    type: 1,
+    options: [
+      {
+        type: 6,
+        name: 'user',
+        description: 'User to clear warnings for',
+        required: true,
+      },
+    ],
+  },
+
+  /* =====================
+     MODLOGS SETUP
+  ===================== */
+  {
+    name: 'modlogs',
+    description: 'Set the moderation logs channel',
+    type: 1,
+    options: [
+      {
+        type: 7, // CHANNEL
+        name: 'channel',
+        description: 'Channel for mod logs',
+        required: true,
+      },
+    ],
+  },
+  {
+  name: 'cases',
+  description: 'View all cases of a user',
+  options: [
+    {
+      name: 'user',
+      type: 6, // USER
+      description: 'Select user',
+      required: true,
+    },
+  ],
+},
+{
+  name: 'case',
+  description: 'View a specific case',
+  options: [
+    {
+      name: 'id',
+      type: 4, // INTEGER
+      description: 'Case ID',
+      required: true,
+    },
+  ],
+},
+{
+  name: 'unban',
+  description: 'Unban a user',
+  options: [
+    {
+      name: 'user',
+      type: 6,
+      description: 'User ID',
+      required: true,
+    },
+  ],
+},
+{
+  name: 'purge',
+  description: 'Delete messages',
+  options: [
+    {
+      name: 'amount',
+      type: 4,
+      description: 'Number of messages to delete (1-1000)',
+      required: true,
+    },
+  ],
+},
+{
+  name: 'lock',
+  description: 'Lock the current channel',
+},
+{
+  name: 'unlock',
+  description: 'Unlock the current channel',
+},
+{
+  name: 'slowmode',
+  description: 'Set slowmode',
+  options: [
+    {
+      name: 'seconds',
+      type: 4,
+      description: 'Slowmode duration in seconds',
+      required: true,
+    },
+  ],
+},
+{
+  name: 'userinfo',
+  description: 'Get user info',
+  options: [
+    {
+      name: 'user',
+      type: 6,
+      description: 'User',
+      required: true,
+    },
+  ],
+}
+];
+
+async function register() {
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bot ${TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(commands),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    console.error('❌ Failed to register commands:', data);
+    process.exit(1);
+  }
+
+  console.log(
+    '✅ Successfully registered commands:',
+    data.map(c => c.name)
+  );
+}
+
+register();
