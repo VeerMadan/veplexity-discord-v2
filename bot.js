@@ -22,15 +22,13 @@ client.commands = new Collection();
 // 🔧 Initialize Discord Player
 const player = new Player(client);
 
-// 🔧 1. Register Youtubei Extractor as the main engine
-player.extractors.register(YoutubeiExtractor, {}).then(() => {
-  console.log("✅ Youtubei Extractor loaded successfully.");
-}).catch(console.error);
+// 🔧 Optimized Extractor Registration
+player.extractors.register(YoutubeiExtractor, {
+  streamOptions: { useClient: 'WEB' } // Forces a standard web-client connection
+});
 
-// 🔧 2. Load Fallback Extractors (Spotify, SoundCloud) so it can bridge streams if YouTube blocks Azure
-player.extractors.loadMulti(DefaultExtractors).then(() => {
-  console.log("✅ Fallback extractors loaded.");
-}).catch(console.error);
+// Load everything else AFTER
+await player.extractors.loadMulti(DefaultExtractors);
 
 // 🔧 3. Catch internal audio errors so the bot doesn't throw warnings
 player.events.on('error', (queue, error) => {

@@ -4,27 +4,25 @@ export async function playSong(interaction, query, voiceChannel) {
   const player = useMainPlayer();
 
   try {
-    console.log("Searching and Queueing via Discord Player...");
-    
-    // 🔧 The magic function: Handles joining VC, searching, extracting, and queueing
-    const { track } = await player.play(voiceChannel, query, {
-      nodeOptions: {
-        metadata: interaction, // Attach interaction for event listeners
-        leaveOnEmpty: true,
-        leaveOnEmptyCooldown: 300000, // Leave after 5 mins of being alone
-        leaveOnEnd: false
-      }
+    // 🔧 Force a search that skips the aggressive HTML parsing
+    const searchResult = await player.search(query, {
+      requestedBy: interaction.user,
+      searchEngine: 'youtube' // Use standard youtube search instead of the heavy parser
     });
 
-    return interaction.editReply({
-        content: `🎶 Added to queue: **${track.title}**`
+    if (!searchResult.hasTracks()) {
+      return interaction.editReply({ content: '❌ No results found.' });
+    }
+
+    await player.play(voiceChannel, searchResult.tracks[0], {
+      nodeOptions: { metadata: interaction }
     });
+
+    return interaction.editReply({ content: `🎶 Added to queue: **${searchResult.tracks[0].title}**` });
 
   } catch (error) {
     console.error("Playback Engine Error:", error);
-    return interaction.editReply({
-        content: `❌ Failed to extract the stream. YouTube might be blocking the IP right now.`
-    });
+    return interaction.editReply({ content: `❌ Stream extraction failed: ${error.message}` });
   }
 }
 
