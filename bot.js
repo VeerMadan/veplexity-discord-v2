@@ -397,7 +397,11 @@ import express from 'express';
 import cors from 'cors';
 
 const app = express();
-app.use(cors()); // 👈 Allows Vercel to fetch your data safely
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
 app.use(express.json());
 
 // 🌐 Health Check
@@ -416,6 +420,11 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
+//const PORT = process.env.PORT || 8080;
+//app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Dashboard API running on port ${PORT}`));
+
+
+// Find this in bot.js and change it:
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Dashboard API running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`🌐 API listening on 0.0.0.0:${PORT}`));
 client.login(process.env.DISCORD_TOKEN.replace(/['"]/g, '').trim());
