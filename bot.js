@@ -12,6 +12,14 @@ process.env.FFMPEG_PATH = ffmpeg;
 import dns from 'node:dns'; 
 dns.setDefaultResultOrder('ipv4first');
 
+// 🛡️ ANTI-CRASH ARMOR: Prevents the bot from ever shutting down due to random API errors
+process.on('unhandledRejection', (reason, p) => {
+    console.log('[Anti-Crash] Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (err, origin) => {
+    console.log('[Anti-Crash] Uncaught Exception:', err);
+});
+
 /* =========================
    DATABASE SETUP
 ========================= */
@@ -121,6 +129,8 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages],
 });
 
+client.on('error', err => console.log(`[Discord Client Error] ${err.message}`));
+
 const player = new Player(client, { skipFFmpeg: false });
 player.extractors.register(YoutubeiExtractor, { streamOptions: { useClient: 'WEB' } }).catch(console.error);
 player.extractors.loadMulti(DefaultExtractors).catch(console.error);
@@ -154,7 +164,13 @@ client.on('interactionCreate', async (interaction) => {
       }
   }
 
-  await interaction.deferReply();
+  // 🛡️ ANTI-CRASH: Safely defer reply so 3-second timeouts don't crash the bot
+  try {
+      await interaction.deferReply();
+  } catch (err) {
+      console.log('[Anti-Crash] Interaction expired before deferral.');
+      return; // Stop here so it doesn't try to edit a dead message
+  }
 
   try {
     switch (commandName) {
@@ -263,7 +279,6 @@ client.on('interactionCreate', async (interaction) => {
         const caseId = createCase(interaction, 'purge', interaction.user.id, `Deleted ${amount} messages`);
         const e = buildEmbed('Messages Purged', '🧹', 0x95a5a6, [{ name: 'Deleted', value: `${amount}` }, { name: 'Case', value: `#${caseId}` }]);
         
-        // 🔧 BUG FIX: If bulkDelete destroyed our "thinking" message, send a new message instead of crashing!
         try {
             await interaction.editReply({ embeds: [e] });
         } catch {
@@ -367,11 +382,10 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       default:
-        await interaction.editReply('❌ Command execution logic missing.');
+        await interaction.editReply('❌ Command execution logic missing.').catch(()=>null);
     }
   } catch (error) {
     console.error(`Error in ${commandName}:`, error);
-    // 🔧 BUG FIX: Safely catch any other weird Discord errors so the server doesn't crash!
     try {
         await interaction.followUp({ content: '❌ An error occurred executing this command.', ephemeral: true }).catch(() => null);
     } catch (e) {
