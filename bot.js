@@ -54,7 +54,7 @@ function createCase(interaction, action, userId, reason) {
 }
 
 /* =========================
-   CONSTANTS (From your app.js)
+   CONSTANTS
 ========================= */
 const WARNING_ESCALATION = {
   3: { type: 'timeout', duration: '10m' },
@@ -64,7 +64,7 @@ const WARNING_ESCALATION = {
   7: { type: 'ban' },
 };
 
-const PRIVATE_VC_ROLE_IDS = ['1469376368067477689']; // Your PVC Roles
+const PRIVATE_VC_ROLE_IDS = ['1469376368067477689']; 
 const ALLOWED_MOD_ROLE_IDS = [
   '1469048464406220972', '1469048464330588210', 
   '1469048464330588209', '1469048464330588208', '1469048464330588207'
@@ -125,7 +125,7 @@ const player = new Player(client, { skipFFmpeg: false });
 player.extractors.register(YoutubeiExtractor, { streamOptions: { useClient: 'WEB' } }).catch(console.error);
 player.extractors.loadMulti(DefaultExtractors).catch(console.error);
 
-client.once('ready', () => console.log(`🤖 Logged in as ${client.user.tag}`));
+client.once('clientReady', () => console.log(`🤖 Logged in as ${client.user.tag}`));
 
 /* =========================
    THE MASTER ROUTER
@@ -142,7 +142,6 @@ client.on('interactionCreate', async (interaction) => {
 
   const { commandName, options } = interaction;
   
-  // Mod Permission Check (Skip for music)
   const MOD_COMMANDS = ['warn', 'pvc_warn', 'kick', 'timeout', 'ban', 'pvc_ban', 'warnings', 'clearwarnings', 'modlogs', 'pvc_restore', 'case', 'cases', 'purge', 'lock', 'unlock', 'slowmode'];
   
   if (MOD_COMMANDS.includes(commandName)) {
@@ -193,7 +192,6 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.editReply({ embeds: [replyEmbed] });
         await sendModLog(interaction, replyEmbed);
 
-        // Escalation
         if (!pvc) {
             const rule = WARNING_ESCALATION[data.n];
             if (rule) {
@@ -261,10 +259,16 @@ client.on('interactionCreate', async (interaction) => {
 
       case 'purge': {
         const amount = options.getInteger('amount');
-        await interaction.channel.bulkDelete(amount, true);
+        await interaction.channel.bulkDelete(amount, true).catch(() => null);
         const caseId = createCase(interaction, 'purge', interaction.user.id, `Deleted ${amount} messages`);
         const e = buildEmbed('Messages Purged', '🧹', 0x95a5a6, [{ name: 'Deleted', value: `${amount}` }, { name: 'Case', value: `#${caseId}` }]);
-        await interaction.editReply({ embeds: [e] });
+        
+        // 🔧 BUG FIX: If bulkDelete destroyed our "thinking" message, send a new message instead of crashing!
+        try {
+            await interaction.editReply({ embeds: [e] });
+        } catch {
+            await interaction.channel.send({ embeds: [e] }).then(msg => setTimeout(() => msg.delete().catch(()=>null), 5000));
+        }
         await sendModLog(interaction, e);
         break;
       }
@@ -367,7 +371,12 @@ client.on('interactionCreate', async (interaction) => {
     }
   } catch (error) {
     console.error(`Error in ${commandName}:`, error);
-    await interaction.editReply('❌ An error occurred executing this command.');
+    // 🔧 BUG FIX: Safely catch any other weird Discord errors so the server doesn't crash!
+    try {
+        await interaction.followUp({ content: '❌ An error occurred executing this command.', ephemeral: true }).catch(() => null);
+    } catch (e) {
+        // Ignore silent fails
+    }
   }
 });
 
