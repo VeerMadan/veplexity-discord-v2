@@ -4,10 +4,10 @@ import dns from 'node:dns';
 // 🔧 CRITICAL FIX: Force Node.js to use IPv4
 dns.setDefaultResultOrder('ipv4first');
 
-import { Client, GatewayIntentBits, Collection } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { Player } from 'discord-player';
 import { YoutubeiExtractor } from 'discord-player-youtubei';
-import { DefaultExtractors } from '@discord-player/extractor'; // 👈 Safety net added back
+import { DefaultExtractors } from '@discord-player/extractor';
 
 const client = new Client({
   intents: [
@@ -22,47 +22,70 @@ client.commands = new Collection();
 // 🔧 Initialize Discord Player
 const player = new Player(client);
 
-// 🔧 Optimized Extractor Registration
 player.extractors.register(YoutubeiExtractor, {
-  streamOptions: { useClient: 'WEB' } // Forces a standard web-client connection
-});
+  streamOptions: { useClient: 'WEB' }
+}).catch(console.error);
 
-// Load everything else AFTER
-await player.extractors.loadMulti(DefaultExtractors);
+player.extractors.loadMulti(DefaultExtractors).then(() => {
+  console.log("✅ Fallback extractors loaded.");
+}).catch(console.error);
 
-// 🔧 3. Catch internal audio errors so the bot doesn't throw warnings
-player.events.on('error', (queue, error) => {
-    console.log(`[Player Error] ${error.message}`);
-});
-player.events.on('playerError', (queue, error) => {
-    console.log(`[Audio Stream Error] ${error.message}`);
-});
+// 🔧 DEBUG LISTENERS: To catch any silent audio freezes
+player.events.on('debug', (queue, message) => console.log(`[QUEUE] ${message}`));
+player.on('debug', (message) => console.log(`[CORE] ${message}`));
+player.events.on('error', (queue, error) => console.log(`[Player Error] ${error.message}`));
+player.events.on('playerError', (queue, error) => console.log(`[Audio Error] ${error.message}`));
 
-// 🔧 Listen for songs starting
+// 🔧 UI: Send Buttons when a song starts!
 player.events.on('playerStart', (queue, track) => {
-    queue.metadata.channel.send(`▶️ Now playing: **${track.title}**`).catch(console.error);
-});
-// 🔧 X-RAY DEBUG MODE: Track the stream and the voice connection
-player.events.on('debug', (queue, message) => {
-    console.log(`[QUEUE DEBUG] ${message}`);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('pause_play').setLabel('⏯️ Pause/Resume').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('skip_track').setLabel('⏭️ Skip').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('stop_track').setLabel('⏹️ Stop').setStyle(ButtonStyle.Danger)
+    );
+
+    queue.metadata.channel.send({
+      content: `▶️ Now playing: **${track.title}**`,
+      components: [row]
+    }).catch(console.error);
 });
 
-player.on('debug', (message) => {
-    console.log(`[CORE DEBUG] ${message}`);
-});
-client.once('ready', () => {
+client.once('clientReady', () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
 });
 
 client.on('interactionCreate', async (interaction) => {
-  // Handle Slash Commands
+  // 🔧 1. Handle Autocomplete for /play
+  if (interaction.isAutocomplete()) {
+    const query = interaction.options.getString('query');
+    if (!query) return interaction.respond([]);
+    
+    // Search SoundCloud for fast, API-free autocomplete suggestions
+    const results = await player.search(query, { searchEngine: 'soundcloudSearch' });
+    const tracks = results.tracks.slice(0, 10).map((t) => ({
+      name: `${t.title} - ${t.author}`.slice(0, 100),
+      value: t.title.slice(0, 100) // Pass the title back to the command when clicked
+    }));
+    return interaction.respond(tracks);
+  }
+
+  // 🔧 2. Handle Button Clicks
+  if (interaction.isButton()) {
+    const queue = player.nodes.get(interaction.guildId);
+    if (!queue) return interaction.reply({ content: '❌ Nothing is playing.', ephemeral: true });
+
+    await interaction.deferUpdate();
+    if (interaction.customId === 'pause_play') queue.node.setPaused(!queue.node.isPaused());
+    if (interaction.customId === 'skip_track') queue.node.skip();
+    if (interaction.customId === 'stop_track') queue.delete();
+    return;
+  }
+
+  // 🔧 3. Handle Standard Slash Commands (kick, warn, skip, etc.)
   if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
-
-  if (!command) {
-    return interaction.reply('❌ Command not found');
-  }
+  if (!command) return interaction.reply('❌ Command not found');
 
   try {
     await command.execute(interaction, client);
@@ -81,24 +104,16 @@ import path from 'path';
 
 async function loadCommands(dir) {
   const files = fs.readdirSync(dir);
-
   for (const file of files) {
     const fullPath = path.join(dir, file);
-
     if (fs.statSync(fullPath).isDirectory()) {
       await loadCommands(fullPath);
     } else if (file.endsWith('.js')) {
       const imported = await import(`file://${path.resolve(fullPath)}`);
       const command = imported.default;
-
-      console.log('LOADING:', file, command?.name || 'Unknown');
-
-      if (!command || !command.name) {
-        console.log('❌ INVALID COMMAND FILE:', file);
-        continue;
-      }
-
+      if (!command || !command.name) continue;
       client.commands.set(command.name, command);
+      console.log('LOADING:', file, command.name);
     }
   }
 }
@@ -106,23 +121,17 @@ async function loadCommands(dir) {
 await loadCommands('./commands');
  
 import express from 'express';
-
 const app = express();
 app.get('/', (req, res) => res.send('VePlexity Bot Online 🚀'));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🌐 Health server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🌐 Health server running on port ${PORT}`));
 
-// 🔧 BULLETPROOF LOGIN LOGIC
 console.log("🔄 Attempting to authenticate with Discord...");
-
 if (!process.env.DISCORD_TOKEN) {
-  console.error("❌ CRITICAL ERROR: DISCORD_TOKEN is missing in Environment Variables!");
+  console.error("❌ CRITICAL ERROR: DISCORD_TOKEN is missing!");
 } else {
-  const cleanToken = process.env.DISCORD_TOKEN.replace(/['"]/g, '').trim();
-  client.login(cleanToken)
+  client.login(process.env.DISCORD_TOKEN.replace(/['"]/g, '').trim())
     .then(() => console.log("✅ Authentication request successfully sent to Discord!"))
     .catch(err => console.error("❌ FATAL LOGIN ERROR:", err));
 }
