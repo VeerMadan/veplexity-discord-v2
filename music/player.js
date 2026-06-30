@@ -4,21 +4,31 @@ export async function playSong(interaction, query, voiceChannel) {
   const player = useMainPlayer();
 
   try {
-    // 🔧 Force a search that skips the aggressive HTML parsing
+    console.log(`Searching for "${query}" on Spotify to bypass YouTube parser...`);
+    
+    // 🔧 Force the search engine to use Spotify instead of the broken YouTube parser
     const searchResult = await player.search(query, {
       requestedBy: interaction.user,
-      searchEngine: 'youtube' // Use standard youtube search instead of the heavy parser
+      searchEngine: 'spotifySearch' // 👈 THIS IS THE FIX
     });
 
     if (!searchResult.hasTracks()) {
       return interaction.editReply({ content: '❌ No results found.' });
     }
 
-    await player.play(voiceChannel, searchResult.tracks[0], {
-      nodeOptions: { metadata: interaction }
+    const track = searchResult.tracks[0];
+
+    // 🔧 Play the track. discord-player will automatically handle bridging the audio stream!
+    await player.play(voiceChannel, track, {
+      nodeOptions: { 
+        metadata: interaction,
+        leaveOnEmpty: true,
+        leaveOnEmptyCooldown: 300000,
+        leaveOnEnd: false
+      }
     });
 
-    return interaction.editReply({ content: `🎶 Added to queue: **${searchResult.tracks[0].title}**` });
+    return interaction.editReply({ content: `🎶 Added to queue: **${track.title}**` });
 
   } catch (error) {
     console.error("Playback Engine Error:", error);
