@@ -393,5 +393,29 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 });
+import express from 'express';
+import cors from 'cors';
 
+const app = express();
+app.use(cors()); // 👈 Allows Vercel to fetch your data safely
+app.use(express.json());
+
+// 🌐 Health Check
+app.get('/', (req, res) => res.send('VePlexity API Online 🚀'));
+
+// 📊 Dashboard API Endpoint: Get Bot Stats & Database Info
+app.get('/api/stats', (req, res) => {
+  res.json({
+    status: 'online',
+    ping: client.ws.ping,
+    servers: client.guilds.cache.size,
+    users: client.users.cache.size,
+    totalCases: database.caseCounter,
+    // Send the last 5 moderation cases
+    recentCases: Object.entries(database.cases).slice(-5).map(([id, data]) => ({ id, ...data }))
+  });
+});
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Dashboard API running on port ${PORT}`));
 client.login(process.env.DISCORD_TOKEN.replace(/['"]/g, '').trim());
