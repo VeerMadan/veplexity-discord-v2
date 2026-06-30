@@ -4,12 +4,11 @@ export async function playSong(interaction, query, voiceChannel) {
   const player = useMainPlayer();
 
   try {
-    console.log(`Searching for "${query}" on SoundCloud to bypass infinite loops...`);
+    console.log(`Searching for "${query}" on SoundCloud...`);
     
-    // 🔧 Force the search engine to use SoundCloud (No API keys needed, no IP blocks)
     const searchResult = await player.search(query, {
       requestedBy: interaction.user,
-      searchEngine: 'soundcloudSearch' // 👈 THE FIX
+      searchEngine: 'soundcloudSearch'
     });
 
     if (!searchResult.hasTracks()) {
@@ -19,13 +18,15 @@ export async function playSong(interaction, query, voiceChannel) {
     const track = searchResult.tracks[0];
     console.log(`✅ Track found: ${track.title}`);
 
-    // 🔧 Play the track. 
+    // 🔧 Play the track and FORCE FFmpeg to process it
     await player.play(voiceChannel, track, {
       nodeOptions: { 
         metadata: interaction,
         leaveOnEmpty: true,
         leaveOnEmptyCooldown: 300000,
-        leaveOnEnd: false
+        leaveOnEnd: false,
+        // 🔧 This forces FFmpeg to wake up, bypassing the 120ms DAVE drop!
+        biquad: 'classic' 
       }
     });
 
