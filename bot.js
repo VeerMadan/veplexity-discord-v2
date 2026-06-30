@@ -1,5 +1,9 @@
 import 'dotenv/config';
 import dns from 'node:dns'; 
+import ffmpeg from 'ffmpeg-static'; // 👈 1. Import the FFmpeg package
+
+// 🔧 CRITICAL FIX: Tell the audio engine EXACTLY where FFmpeg is located on the Azure server
+process.env.FFMPEG_PATH = ffmpeg;
 
 // 🔧 CRITICAL FIX: Force Node.js to use IPv4
 dns.setDefaultResultOrder('ipv4first');
@@ -19,8 +23,10 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// 🔧 Initialize Discord Player
-const player = new Player(client);
+// 🔧 Initialize Discord Player AND Force it to use FFmpeg
+const player = new Player(client, {
+    skipFFmpeg: false 
+});
 
 player.extractors.register(YoutubeiExtractor, {
   streamOptions: { useClient: 'WEB' }
@@ -30,7 +36,7 @@ player.extractors.loadMulti(DefaultExtractors).then(() => {
   console.log("✅ Fallback extractors loaded.");
 }).catch(console.error);
 
-// 🔧 DEBUG LISTENERS: To catch any silent audio freezes
+// 🔧 DEBUG LISTENERS
 player.events.on('debug', (queue, message) => console.log(`[QUEUE] ${message}`));
 player.on('debug', (message) => console.log(`[CORE] ${message}`));
 player.events.on('error', (queue, error) => console.log(`[Player Error] ${error.message}`));
@@ -60,11 +66,10 @@ client.on('interactionCreate', async (interaction) => {
     const query = interaction.options.getString('query');
     if (!query) return interaction.respond([]);
     
-    // Search SoundCloud for fast, API-free autocomplete suggestions
     const results = await player.search(query, { searchEngine: 'soundcloudSearch' });
     const tracks = results.tracks.slice(0, 10).map((t) => ({
       name: `${t.title} - ${t.author}`.slice(0, 100),
-      value: t.title.slice(0, 100) // Pass the title back to the command when clicked
+      value: t.title.slice(0, 100)
     }));
     return interaction.respond(tracks);
   }
@@ -81,7 +86,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  // 🔧 3. Handle Standard Slash Commands (kick, warn, skip, etc.)
+  // 🔧 3. Handle Standard Slash Commands
   if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
