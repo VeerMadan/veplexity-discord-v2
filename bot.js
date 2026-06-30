@@ -42,7 +42,14 @@ player.events.on('playerError', (queue, error) => {
 player.events.on('playerStart', (queue, track) => {
     queue.metadata.channel.send(`▶️ Now playing: **${track.title}**`).catch(console.error);
 });
+// 🔧 X-RAY DEBUG MODE: Track the stream and the voice connection
+player.events.on('debug', (queue, message) => {
+    console.log(`[QUEUE DEBUG] ${message}`);
+});
 
+player.on('debug', (message) => {
+    console.log(`[CORE DEBUG] ${message}`);
+});
 client.once('ready', () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
 });
