@@ -145,11 +145,30 @@ client.once('clientReady', () => console.log(`🤖 Logged in as ${client.user.ta
    THE MASTER ROUTER
 ========================= */
 client.on('interactionCreate', async (interaction) => {
-  if (interaction.isAutocomplete()) {
+ if (interaction.isAutocomplete()) {
       const query = interaction.options.getString('query');
       if (!query) return interaction.respond([]);
-      const results = await player.search(query, { searchEngine: 'soundcloudSearch' });
-      return interaction.respond(results.tracks.slice(0, 10).map(t => ({ name: `${t.title} - ${t.author}`.slice(0, 100), value: t.title.slice(0, 100) })));
+      
+      try {
+          // 🚀 1. Ask YouTube/Spotify for the official tracks, NOT SoundCloud
+          const results = await player.search(query, { 
+              requestedBy: interaction.user,
+              searchEngine: 'youtubeSearch' // Forces official video/audio search
+          });
+
+          if (!results.hasTracks()) return interaction.respond([]);
+
+          // 🚀 2. CRITICAL FIX: Pass the URL (value: t.url) so the play command never fails
+          return interaction.respond(
+              results.tracks.slice(0, 10).map(t => ({
+                  name: `${t.title} - ${t.author}`.slice(0, 100),
+                  value: t.url.slice(0, 100) // This is the secret sauce!
+              }))
+          );
+      } catch (e) {
+          console.error("Autocomplete error:", e);
+          return interaction.respond([]);
+      }
   }
 
   if (!interaction.isChatInputCommand()) return;
