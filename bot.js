@@ -135,7 +135,7 @@ const player = new Player(client, { skipFFmpeg: false });
 player.extractors.register(YoutubeiExtractor, { streamOptions: { useClient: 'WEB' } }).catch(console.error);
 
 // 🔧 THE FIX: Replaced loadMulti with loadDefault
-player.extractors.loadDefault().catch(console.error);
+await player.extractors.loadDefault().catch(console.error);
 
 client.once('clientReady', () => console.log(`🤖 Logged in as ${client.user.tag}`));
 
@@ -359,16 +359,28 @@ client.on('interactionCreate', async (interaction) => {
         break;
       }
 
-      case 'play': {
+case 'play': {
         const query = options.getString('query');
         const voiceChannel = interaction.member.voice.channel;
         if (!voiceChannel) return interaction.editReply('❌ Join a voice channel first.');
         
-        const searchResult = await player.search(query, { requestedBy: interaction.user, searchEngine: 'soundcloudSearch' });
-        if (!searchResult.hasTracks()) return interaction.editReply('❌ No results found.');
-        
-        await player.play(voiceChannel, searchResult.tracks[0], { nodeOptions: { metadata: interaction, biquad: 'classic' }});
-        return interaction.editReply(`🎶 Added to queue: **${searchResult.tracks[0].title}**`);
+        try {
+          // 🚀 Let discord-player handle smart search & playback in 1 clean step
+          const { track } = await player.play(voiceChannel, query, {
+            requestedBy: interaction.user,
+            nodeOptions: {
+              metadata: interaction,
+              bufferingTimeout: 3000,
+              leaveOnEnd: true,
+              leaveOnEmpty: true
+            }
+          });
+
+          return interaction.editReply(`🎶 Added to queue: **${track.title}** by **${track.author}**`);
+        } catch (error) {
+          console.error('Play command error:', error);
+          return interaction.editReply(`❌ Could not play track: ${error.message || 'Unknown error'}`);
+        }
       }
 
       case 'skip': {
