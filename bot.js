@@ -133,7 +133,9 @@ client.on('error', err => console.log(`[Discord Client Error] ${err.message}`));
 
 const player = new Player(client, { skipFFmpeg: false });
 player.extractors.register(YoutubeiExtractor, { streamOptions: { useClient: 'WEB' } }).catch(console.error);
-player.extractors.loadMulti(DefaultExtractors).catch(console.error);
+
+// 🔧 THE FIX: Replaced loadMulti with loadDefault
+player.extractors.loadDefault().catch(console.error);
 
 client.once('clientReady', () => console.log(`🤖 Logged in as ${client.user.tag}`));
 
@@ -393,6 +395,7 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 });
+
 import express from 'express';
 import cors from 'cors';
 
@@ -420,11 +423,6 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
-//const PORT = process.env.PORT || 8080;
-//app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Dashboard API running on port ${PORT}`));
-
-
-// Find this in bot.js and change it:
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => console.log(`🌐 API listening on 0.0.0.0:${PORT}`));
 client.login(process.env.DISCORD_TOKEN.replace(/['"]/g, '').trim());
