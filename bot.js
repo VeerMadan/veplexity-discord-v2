@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { Client, GatewayIntentBits, EmbedBuilder } from 'discord.js';
 import { Player } from 'discord-player';
-import { YoutubeiExtractor } from 'discord-player-youtubei';
+
 import { DefaultExtractors } from '@discord-player/extractor';
 import ffmpeg from 'ffmpeg-static';
 
@@ -132,7 +132,9 @@ const client = new Client({
 client.on('error', err => console.log(`[Discord Client Error] ${err.message}`));
 
 const player = new Player(client, { skipFFmpeg: false });
-player.extractors.register(YoutubeiExtractor, { streamOptions: { useClient: 'WEB' } }).catch(console.error);
+//player.extractors.register(YoutubeiExtractor, { streamOptions: { useClient: 'WEB' } }).catch(console.error);
+//commenting out the above line because it was causing issues with the latest version of discord-player
+//and this mf costed me 3 hours of debugging. The new version of discord-player has built-in support for YouTube, so we don't need to register the extractor manually anymore.
 
 // 🔧 THE FIX: Replaced loadMulti with loadDefault
 await player.extractors.loadDefault().catch(console.error);
@@ -365,12 +367,11 @@ case 'play': {
         if (!voiceChannel) return interaction.editReply('❌ Join a voice channel first.');
         
         try {
-          // 🚀 Let discord-player handle smart search & playback in 1 clean step
           const { track } = await player.play(voiceChannel, query, {
             requestedBy: interaction.user,
             nodeOptions: {
               metadata: interaction,
-              bufferingTimeout: 3000,
+              biquad: 'classic',
               leaveOnEnd: true,
               leaveOnEmpty: true
             }
