@@ -138,6 +138,9 @@ const commands = [
       { name: 'user', description: 'User to summon', type: 6, required: true },
     ],
   },
+  { name: 'connect', description: 'Connect the bot to your voice channel' },
+  { name: 'disconnect', description: 'Disconnect the bot from voice channel' },
+  { name: '247', description: 'Toggle 24/7 mode (bot stays connected in VC)' },
 ];
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);

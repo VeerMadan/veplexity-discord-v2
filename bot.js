@@ -147,8 +147,18 @@ client.lavalink = new LavalinkManager({
     playerOptions: {
         defaultSearchPlatform: 'ytsearch',
         onDisconnect: { autoReconnect: true, destroyPlayer: false },
-        onEmptyQueue: { destroyAfterMs: 30000 }
+        onEmptyQueue: { destroyAfterMs: 9999999999 } // disabled — handled manually below for 24/7 support
     }
+});
+
+const guild247 = new Set();
+
+client.lavalink.on('queueEnd', (player) => {
+    if (guild247.has(player.guildId)) return; // 24/7 mode — stay connected
+    setTimeout(() => {
+        const p = client.lavalink.getPlayer(player.guildId);
+        if (p && !p.queue.tracks.length && !p.playing) p.destroy();
+    }, 30000);
 });
 
 client.on('raw', d => client.lavalink.sendRawData(d));
@@ -440,7 +450,40 @@ case 'summon': {
       }
 
 
-case 'play': {
+case 'connect': {
+        const voiceChannel = interaction.member.voice.channel;
+        if (!voiceChannel) return interaction.editReply('❌ Join a voice channel first.');
+        let lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+        if (!lavaPlayer) {
+            lavaPlayer = client.lavalink.createPlayer({
+                guildId: interaction.guildId,
+                voiceChannelId: voiceChannel.id,
+                textChannelId: interaction.channelId,
+                selfDeaf: false,
+                selfMute: false
+            });
+        }
+        if (!lavaPlayer.connected) await lavaPlayer.connect();
+        return interaction.editReply(`🔌 Connected to **${voiceChannel.name}**.`);
+      }
+
+      case 'disconnect': {
+        const lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+        guild247.delete(interaction.guildId);
+        if (lavaPlayer) await lavaPlayer.destroy();
+        return interaction.editReply('🔌 Disconnected.');
+      }
+
+      case '247': {
+        if (guild247.has(interaction.guildId)) {
+            guild247.delete(interaction.guildId);
+            return interaction.editReply('🌙 24/7 mode **disabled** — I\'ll leave when idle.');
+        }
+        guild247.add(interaction.guildId);
+        return interaction.editReply('☀️ 24/7 mode **enabled** — I\'ll stay connected.');
+      }
+
+      case 'play': {
         const query = options.getString('query');
         const voiceChannel = interaction.member.voice.channel;
         if (!voiceChannel) return interaction.editReply('❌ Join a voice channel first.');
