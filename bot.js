@@ -161,10 +161,10 @@ client.lavalink.on('trackStart', (player, track) => {
     if (channel) channel.send(`🎶 Now playing: **${track.info.title}** by **${track.info.author}**`).catch(() => null);
 });
 client.lavalink.on('trackError', (player, track, payload) => {
-    console.error(`❌ Track Error for ${track.info.title}:`, payload.error);
+    console.error(`❌ Track Error for ${track.info.title}:`, JSON.stringify(payload, null, 2));
 });
 client.lavalink.on('trackStuck', (player, track, payload) => {
-    console.error(`⚠️ Track Stuck for ${track.info.title}:`, payload);
+    console.error(`⚠️ Track Stuck for ${track.info.title}:`, JSON.stringify(payload, null, 2));
 });
 
 
@@ -412,6 +412,33 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.editReply({ embeds: [buildEmbed(`Case #${caseId}`, '📁', 0x3498db, [{ name: 'Action', value: data.action, inline: true }, { name: 'User', value: `<@${data.user}>`, inline: true }, { name: 'Reason', value: data.reason }])] });
         break;
       }
+case 'summon': {
+        const targetUser = options.getUser('user');
+        if (!targetUser) return interaction.editReply('❌ You need to mention someone to summon.');
+
+        const summonGifs = [
+            'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExZXZ5OGQ3cDg5bnp0dHNxenF4ZjFsaGYxNG12enZicGZjdjJqeXlueSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3ZtcLF5HB4nqOpEXAW/giphy.gif',
+            'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExODUwejk0MTRvOG5qd3htbWpib2ZkeHF4MHFzZjg3NmIyZXd3NG9qaSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/hxNEBJCP8uQ6aGrTzx/giphy.gif',
+            'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdmllYmZpdjVveHJzejEzd29kcG5ocmIxa3BzaDB6Zm1qb3BtY2EzZSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/WVg5BoRXPaID5Y7ALb/giphy.gif',
+            'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3YXZqbHlrOTA4MHNnZGYzZjdhZDdjY2R6aGIwOWJqeHIwMjBvYzE3YSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/eQACuze30PkNiS1eb7/giphy.gif',
+            'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMHIxd3VkYzRybmwwN2RoczJrYWlhc2o5ZGg5ejV6cXlyeHJ6cTBlZyZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/2Y9eQob7S7ighEhv3y/giphy.gif',
+            'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMHIxd3VkYzRybmwwN2RoczJrYWlhc2o5ZGg5ejV6cXlyeHJ6cTBlZyZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/gr7ekRT0Jzmi6mdpPy/giphy.gif',
+            'https://tenor.com/en-IN/view/obito-uchiha-obito-naruto-naruto-shippuden-gif-25032724',
+            'https://tenor.com/en-IN/view/invocation-naruto-hand-seals-anime-gif-16713463',
+            'https://tenor.com/en-IN/view/tenten-summoning-smoke-naruto-naruto-shippuden-gif-17470210',
+            'https://tenor.com/en-IN/view/orochimaru-reanimation-jutsu-naruto-gif-11623667',
+            'https://tenor.com/en-IN/view/madara-gif-21909255',
+            'https://tenor.com/en-IN/view/madara-gif-22064055',
+            'https://tenor.com/en-IN/view/anime-edo-tensei-kabuto-yakushi-naruto-snake-sage-mode-gif-12789687',
+        ];
+        const gif = summonGifs[Math.floor(Math.random() * summonGifs.length)];
+
+        return interaction.editReply({
+            content: `🔮 <@${interaction.user.id}> summoned <@${targetUser.id}>!`,
+            embeds: [{ image: { url: gif } }]
+        });
+      }
+
 
 case 'play': {
         const query = options.getString('query');
@@ -425,7 +452,8 @@ case 'play': {
                   guildId: interaction.guildId,
                   voiceChannelId: voiceChannel.id,
                   textChannelId: interaction.channelId,
-                  selfDeaf: true
+                  selfDeaf: false,
+                  selfMute: false
               });
           }
           if (!lavaPlayer.connected) await lavaPlayer.connect();

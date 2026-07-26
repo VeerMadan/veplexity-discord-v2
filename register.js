@@ -131,6 +131,13 @@ const commands = [
   },
   { name: 'stop', description: 'Stop music and leave VC' },
   { name: 'skip', description: 'Skip song' },
+  {
+    name: 'summon',
+    description: 'Summon someone with a dramatic gif',
+    options: [
+      { name: 'user', description: 'User to summon', type: 6, required: true },
+    ],
+  },
 ];
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
