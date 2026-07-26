@@ -390,14 +390,12 @@ case 'play': {
         if (!voiceChannel) return interaction.editReply('❌ Join a voice channel first.');
         
         try {
-          // 🚀 THE FIX: If you type raw text, force Spotify to search for the official track. 
-          // If you paste a URL, leave it on 'auto' so it just plays.
-          const isURL = query.startsWith('http');
-          const engine = isURL ? 'auto' : 'spotifySearch';
+          // 🚀 THE FIX: If query is a URL, auto-resolve it. If it's raw text, force Spotify to search for it.
+          const searchEngine = query.startsWith('http') ? 'auto' : 'spotifySearch';
 
           const { track } = await player.play(voiceChannel, query, {
             requestedBy: interaction.user,
-            searchEngine: engine, // <--- This prevents the yt-dlp search crash!
+            searchEngine: searchEngine, // <--- Passes the smart search logic
             nodeOptions: {
               metadata: interaction,
               biquad: 'classic',
