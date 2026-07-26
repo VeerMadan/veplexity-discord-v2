@@ -154,15 +154,15 @@ client.on('interactionCreate', async (interaction) => {
       if (!query || query.trim().length < 2) return interaction.respond([]);
       
       try {
-          // 🚀 Explicitly use 'youtubeSearch' (fast HTTP fetch) to bypass heavy yt-dlp spawning while typing
+          // 🚀 1. Use Spotify for lightning-fast autocomplete (bypasses the 3-second Discord limit)
           const results = await player.search(query, { 
               requestedBy: interaction.user,
-              searchEngine: 'youtubeSearch' 
+              searchEngine: 'spotifySearch' // <--- THE HYBRID MAGIC
           });
 
           if (!results || !results.hasTracks()) return interaction.respond([]);
 
-          // 🚀 Return top 10 options cleanly
+          // 🚀 2. Return the top 10 clean, official tracks instantly
           return interaction.respond(
               results.tracks.slice(0, 10).map(t => ({
                   name: `${t.title} - ${t.author}`.slice(0, 100),
@@ -170,7 +170,7 @@ client.on('interactionCreate', async (interaction) => {
               }))
           );
       } catch (e) {
-          // If a request takes too long, safely exit without breaking Discord
+          // Silent catch so Discord doesn't crash on timeouts
           return interaction.respond([]).catch(() => {});
       }
   }
