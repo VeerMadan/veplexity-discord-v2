@@ -2,10 +2,7 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { Client, GatewayIntentBits, EmbedBuilder } from 'discord.js';
-import { Player, QueryType } from 'discord-player';
-
-import { DefaultExtractors, SoundCloudExtractor } from '@discord-player/extractor';
-import { YoutubeiExtractor } from 'discord-player-youtubei';
+import { LavalinkManager } from 'lavalink-client';
 import ffmpeg from 'ffmpeg-static';
 
 // 🔧 CRITICAL FIXES
@@ -132,52 +129,43 @@ const client = new Client({
 //aise hi
 client.on('error', err => console.log(`[Discord Client Error] ${err.message}`));
 
-const player = new Player(client, { skipFFmpeg: false });
-//player.extractors.register(YoutubeiExtractor, { streamOptions: { useClient: 'WEB' } }).catch(console.error);
-//commenting out the above line because it was causing issues with the latest version of discord-player
-//and this mf costed me 3 hours of debugging. The new version of discord-player has built-in support for YouTube, so we don't need to register the extractor manually anymore.
-
-// 🔧 1. Load the core extractors for broad searching
-// Register YouTube via youtubei FIRST — this is the reliable one
-
-const cookiePath = process.env.YOUTUBE_COOKIE_PATH;
-const cookieString = cookiePath && fs.existsSync(cookiePath)
-    ? fs.readFileSync(cookiePath, 'utf-8').trim()
-    : undefined;
-
-if (cookieString) {
-    console.log(`✅ YouTube cookie loaded (${cookieString.length} chars)`);
-} else {
-    console.log('⚠️ No YouTube cookie loaded — check YOUTUBE_COOKIE_PATH in .env');
-}
-
-await player.extractors.register(YoutubeiExtractor, {
-    streamOptions: { useClient: 'WEB' },
-    cookie: cookieString,
-    overrideBridgeMode: 'ytmusic' // route Spotify bridging through YT Music, generally more stable
-}).catch(console.error);
-
-const extractors = DefaultExtractors.filter(ext => ext !== SoundCloudExtractor);
-await player.extractors.loadMulti(extractors).catch(console.error);
-
-console.log('[Debug] Loaded extractors:', [...player.extractors.store.keys()]);
-
-// 🔊 Player-level error logging (fixes silent join+leave bug)
-player.events.on('playerError', (queue, error) => {
-    console.error(`[Player Error] Guild ${queue.guild.id}:`, error);
+client.lavalink = new LavalinkManager({
+    nodes: [
+        {
+            authorization: process.env.LAVALINK_PASSWORD,
+            host: '127.0.0.1',
+            port: 2333,
+            id: 'main-node'
+        }
+    ],
+    sendToShard: (guildId, payload) => client.guilds.cache.get(guildId)?.shard?.send(payload),
+    client: {
+        id: process.env.CLIENT_ID,
+        username: 'VePlexity'
+    },
+    autoSkip: true,
+    playerOptions: {
+        defaultSearchPlatform: 'ytsearch',
+        onDisconnect: { autoReconnect: true, destroyPlayer: false },
+        onEmptyQueue: { destroyAfterMs: 30000 }
+    }
 });
-player.events.on('error', (queue, error) => {
-    console.error(`[Queue Error] Guild ${queue.guild.id}:`, error);
-});
-player.events.on('emptyChannel', (queue) => {
-    console.log(`[Info] Left ${queue.guild.name} — voice channel empty.`);
-});
-player.events.on('disconnect', (queue) => {
-    console.log(`[Info] Manually disconnected from ${queue.guild.name}.`);
+
+client.on('raw', d => client.lavalink.sendRawData(d));
+
+client.lavalink.nodeManager.on('connect', (node) => console.log(`✅ Lavalink node "${node.id}" connected`));
+client.lavalink.nodeManager.on('error', (node, error) => console.error(`❌ Lavalink node "${node.id}" error:`, error));
+
+client.lavalink.on('trackStart', (player, track) => {
+    const channel = client.channels.cache.get(player.textChannelId);
+    if (channel) channel.send(`🎶 Now playing: **${track.info.title}** by **${track.info.author}**`).catch(() => null);
 });
 
 
-client.once('clientReady', () => console.log(`🤖 Logged in as ${client.user.tag}`));
+client.once('clientReady', () => {
+    console.log(`🤖 Logged in as ${client.user.tag}`);
+    client.lavalink.init({ id: client.user.id, username: client.user.username });
+});
 
 /* =========================
    THE MASTER ROUTER
@@ -188,28 +176,20 @@ client.on('interactionCreate', async (interaction) => {
       if (!query || query.trim().length < 2) return interaction.respond([]);
       
       try {
-          // 🚀 Let the auto engine handle it to prevent strict-engine crashes
-          const [spotifyResults, ytResults] = await Promise.all([
-              player.search(query, { requestedBy: interaction.user, searchEngine: QueryType.SPOTIFY_SEARCH }).catch(() => null),
-              player.search(query, { requestedBy: interaction.user, searchEngine: QueryType.YOUTUBE_SEARCH }).catch(() => null)
-          ]);
+          const node = client.lavalink.nodeManager.leastUsedNodes()[0];
+          if (!node) return interaction.respond([]);
+          const res = await node.search({ query, source: 'ytsearch' }, interaction.user).catch(() => null);
+          if (!res || !res.tracks?.length) return interaction.respond([]);
 
-          const spotifyTracks = spotifyResults?.hasTracks() ? spotifyResults.tracks.slice(0, 5) : [];
-          const ytTracks = ytResults?.hasTracks() 
-              ? ytResults.tracks.filter(t => !/remix|cover|sped up|slowed|8d|nightcore|mashup/i.test(t.title)).slice(0, 5)
-              : [];
-
-          const combined = [
-              ...spotifyTracks.map(t => ({ t, tag: '🟢' })),
-              ...ytTracks.map(t => ({ t, tag: '🔴' }))
-          ];
-
-          if (!combined.length) return interaction.respond([]);
+          const filtered = res.tracks.filter(t => 
+              !/remix|cover|sped up|slowed|8d|nightcore|mashup/i.test(t.info.title)
+          );
+          const finalTracks = filtered.length ? filtered : res.tracks;
 
           return interaction.respond(
-              combined.slice(0, 10).map(({ t, tag }) => ({
-                  name: `${tag} ${t.title} - ${t.author}`.slice(0, 100),
-                  value: t.url.slice(0, 100)
+              finalTracks.slice(0, 10).map(t => ({
+                  name: `${t.info.title} - ${t.info.author}`.slice(0, 100),
+                  value: t.info.uri.slice(0, 100)
               }))
           );
       } catch (e) {
@@ -431,20 +411,29 @@ case 'play': {
         const query = options.getString('query');
         const voiceChannel = interaction.member.voice.channel;
         if (!voiceChannel) return interaction.editReply('❌ Join a voice channel first.');
-        
-        try {
-          // 🚀 Let discord-player auto-resolve the best source naturally
-          const { track } = await player.play(voiceChannel, query, {
-            requestedBy: interaction.user,
-            nodeOptions: {
-              metadata: interaction,
-              // Removed biquad filter to prevent immediate stream crashing
-              leaveOnEnd: true,
-              leaveOnEmpty: true
-            }
-          });
 
-          return interaction.editReply(`🎶 Added to queue: **${track.title}** by **${track.author}**`);
+        try {
+          let lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+          if (!lavaPlayer) {
+              lavaPlayer = client.lavalink.createPlayer({
+                  guildId: interaction.guildId,
+                  voiceChannelId: voiceChannel.id,
+                  textChannelId: interaction.channelId,
+                  selfDeaf: true
+              });
+          }
+          if (!lavaPlayer.connected) await lavaPlayer.connect();
+
+          const res = await lavaPlayer.search({ query, source: 'ytsearch' }, interaction.user);
+          if (!res || !res.tracks?.length) {
+              return interaction.editReply(`❌ No results found for "${query}"`);
+          }
+
+          const track = res.tracks[0];
+          await lavaPlayer.queue.add(track);
+          if (!lavaPlayer.playing) await lavaPlayer.play();
+
+          return interaction.editReply(`🎶 Added to queue: **${track.info.title}** by **${track.info.author}**`);
         } catch (error) {
           console.error('Play command error:', error);
           return interaction.editReply(`❌ Could not play track: ${error.message || 'Unknown error'}`);
@@ -452,14 +441,14 @@ case 'play': {
       }
 
       case 'skip': {
-        const q = player.nodes.get(interaction.guildId);
-        if (q) q.node.skip();
+        const lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+        if (lavaPlayer) await lavaPlayer.skip();
         return interaction.editReply('⏭️ Skipped.');
       }
 
       case 'stop': {
-        const q = player.nodes.get(interaction.guildId);
-        if (q) q.delete();
+        const lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+        if (lavaPlayer) await lavaPlayer.destroy();
         return interaction.editReply('⏹️ Stopped and left VC.');
       }
 
