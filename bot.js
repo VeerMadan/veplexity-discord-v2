@@ -5,6 +5,7 @@ import { Client, GatewayIntentBits, EmbedBuilder } from 'discord.js';
 import { Player, QueryType } from 'discord-player';
 
 import { DefaultExtractors, SoundCloudExtractor } from '@discord-player/extractor';
+import { YoutubeiExtractor } from 'discord-player-youtubei';
 import ffmpeg from 'ffmpeg-static';
 
 // 🔧 CRITICAL FIXES
@@ -137,8 +138,15 @@ const player = new Player(client, { skipFFmpeg: false });
 //and this mf costed me 3 hours of debugging. The new version of discord-player has built-in support for YouTube, so we don't need to register the extractor manually anymore.
 
 // 🔧 1. Load the core extractors for broad searching
+// Register YouTube via youtubei FIRST — this is the reliable one
+await player.extractors.register(YoutubeiExtractor, {
+    streamOptions: { useClient: 'ANDROID' } // ANDROID client dodges throttling better than WEB right now
+}).catch(console.error);
+
 const extractors = DefaultExtractors.filter(ext => ext !== SoundCloudExtractor);
 await player.extractors.loadMulti(extractors).catch(console.error);
+
+console.log('[Debug] Loaded extractors:', [...player.extractors.store.keys()]);
 
 // 🔊 Player-level error logging (fixes silent join+leave bug)
 player.events.on('playerError', (queue, error) => {
@@ -168,8 +176,7 @@ client.on('interactionCreate', async (interaction) => {
       try {
           // 🚀 Let the auto engine handle it to prevent strict-engine crashes
           const results = await player.search(query, { 
-              requestedBy: interaction.user,
-              searchEngine: QueryType.YOUTUBE_SEARCH
+              requestedBy: interaction.user
           });
 
           if (!results || !results.hasTracks()) return interaction.respond([]);
@@ -409,7 +416,6 @@ case 'play': {
           // 🚀 Let discord-player auto-resolve the best source naturally
           const { track } = await player.play(voiceChannel, query, {
             requestedBy: interaction.user,
-            searchEngine: QueryType.YOUTUBE_SEARCH,
             nodeOptions: {
               metadata: interaction,
               // Removed biquad filter to prevent immediate stream crashing
