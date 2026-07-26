@@ -1,3 +1,4 @@
+import { YouTubeDlpExtractor } from 'discord-player-youtubedlp';
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
@@ -138,6 +139,7 @@ const player = new Player(client, { skipFFmpeg: false });
 
 // 🔧 THE FIX: Replaced loadMulti with loadDefault
 await player.extractors.loadDefault().catch(console.error);
+await player.extractors.register(YouTubeDlpExtractor, {}).catch(console.error);
 
 client.once('clientReady', () => console.log(`🤖 Logged in as ${client.user.tag}`));
 
