@@ -425,7 +425,8 @@ case 'play': {
           if (!lavaPlayer.connected) await lavaPlayer.connect();
 
           const isUrl = /^https?:\/\//i.test(query);
-          const res = await lavaPlayer.search(isUrl ? query : { query, source: 'ytsearch' }, interaction.user);
+          const res = await lavaPlayer.search(isUrl ? { query } : { query, source: 'ytsearch' }, interaction.user);
+          console.log('[Play Debug] loadType:', res?.loadType, '| tracks:', res?.tracks?.length, '| exception:', res?.exception);
           if (!res || !res.tracks?.length) {
               return interaction.editReply(`❌ No results found for "${query}"`);
           }
