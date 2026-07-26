@@ -142,8 +142,14 @@ const player = new Player(client, { skipFFmpeg: false });
 
 const cookiePath = process.env.YOUTUBE_COOKIE_PATH;
 const cookieString = cookiePath && fs.existsSync(cookiePath)
-    ? fs.readFileSync(cookiePath, 'utf-8')
+    ? fs.readFileSync(cookiePath, 'utf-8').trim()
     : undefined;
+
+if (cookieString) {
+    console.log(`✅ YouTube cookie loaded (${cookieString.length} chars)`);
+} else {
+    console.log('⚠️ No YouTube cookie loaded — check YOUTUBE_COOKIE_PATH in .env');
+}
 
 await player.extractors.register(YoutubeiExtractor, {
     streamOptions: { useClient: 'WEB' },
