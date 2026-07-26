@@ -139,9 +139,17 @@ const player = new Player(client, { skipFFmpeg: false });
 
 // 🔧 1. Load the core extractors for broad searching
 // Register YouTube via youtubei FIRST — this is the reliable one
+import fs from 'fs'; // already imported near top of your file — remove this line if duplicate
+
+const cookiePath = process.env.YOUTUBE_COOKIE_PATH;
+const cookieString = cookiePath && fs.existsSync(cookiePath)
+    ? fs.readFileSync(cookiePath, 'utf-8')
+    : undefined;
+
 await player.extractors.register(YoutubeiExtractor, {
-    streamOptions: { useClient: 'WEB' }, // WEB client is required for PO token support
-    generateWithPoToken: true // YouTube now requires this for stream requests — fixes the 400 error
+    streamOptions: { useClient: 'WEB' },
+    cookie: cookieString,
+    overrideBridgeMode: 'ytmusic' // route Spotify bridging through YT Music, generally more stable
 }).catch(console.error);
 
 const extractors = DefaultExtractors.filter(ext => ext !== SoundCloudExtractor);
