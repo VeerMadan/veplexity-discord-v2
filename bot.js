@@ -137,8 +137,10 @@ const player = new Player(client, { skipFFmpeg: false });
 //commenting out the above line because it was causing issues with the latest version of discord-player
 //and this mf costed me 3 hours of debugging. The new version of discord-player has built-in support for YouTube, so we don't need to register the extractor manually anymore.
 
-// 🔧 THE FIX: Replaced loadMulti with loadDefault
-await player.extractors.loadDefault().catch(console.error);
+// 🔧 1. Load the core extractors for broad searching
+await player.extractors.loadMulti(DefaultExtractors).catch(console.error);
+
+// 🔧 2. Load the YT-DLP engine to securely bridge and stream the audio without silence
 await player.extractors.register(YouTubeDlpExtractor, {}).catch(console.error);
 
 client.once('clientReady', () => console.log(`🤖 Logged in as ${client.user.tag}`));
@@ -152,19 +154,18 @@ client.on('interactionCreate', async (interaction) => {
       if (!query) return interaction.respond([]);
       
       try {
-          // 🚀 1. Ask YouTube/Spotify for the official tracks, NOT SoundCloud
+          // 🚀 We leave the searchEngine open so it pulls multiple results across platforms
           const results = await player.search(query, { 
-              requestedBy: interaction.user,
-              searchEngine: 'youtubeSearch' // Forces official video/audio search
+              requestedBy: interaction.user
           });
 
           if (!results.hasTracks()) return interaction.respond([]);
 
-          // 🚀 2. CRITICAL FIX: Pass the URL (value: t.url) so the play command never fails
+          // 🚀 Returns the top 10 matching results for you to pick from
           return interaction.respond(
               results.tracks.slice(0, 10).map(t => ({
                   name: `${t.title} - ${t.author}`.slice(0, 100),
-                  value: t.url.slice(0, 100) // This is the secret sauce!
+                  value: t.url.slice(0, 100) 
               }))
           );
       } catch (e) {
