@@ -1,4 +1,4 @@
-import { YouTubeDlpExtractor } from 'discord-player-youtubedlp';
+
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
@@ -140,8 +140,6 @@ const player = new Player(client, { skipFFmpeg: false });
 // 🔧 1. Load the core extractors for broad searching
 await player.extractors.loadMulti(DefaultExtractors).catch(console.error);
 
-// 🔧 2. Load the YT-DLP engine to securely bridge and stream the audio without silence
-await player.extractors.register(YouTubeDlpExtractor, {}).catch(console.error);
 
 client.once('clientReady', () => console.log(`🤖 Logged in as ${client.user.tag}`));
 
@@ -154,15 +152,13 @@ client.on('interactionCreate', async (interaction) => {
       if (!query || query.trim().length < 2) return interaction.respond([]);
       
       try {
-          // 🚀 1. Use Spotify for lightning-fast autocomplete (bypasses the 3-second Discord limit)
+          // 🚀 Let the auto engine handle it to prevent strict-engine crashes
           const results = await player.search(query, { 
-              requestedBy: interaction.user,
-              searchEngine: 'spotifySearch' // <--- THE HYBRID MAGIC
+              requestedBy: interaction.user
           });
 
           if (!results || !results.hasTracks()) return interaction.respond([]);
 
-          // 🚀 2. Return the top 10 clean, official tracks instantly
           return interaction.respond(
               results.tracks.slice(0, 10).map(t => ({
                   name: `${t.title} - ${t.author}`.slice(0, 100),
@@ -390,15 +386,12 @@ case 'play': {
         if (!voiceChannel) return interaction.editReply('❌ Join a voice channel first.');
         
         try {
-          // 🚀 THE FIX: If query is a URL, auto-resolve it. If it's raw text, force Spotify to search for it.
-          const searchEngine = query.startsWith('http') ? 'auto' : 'spotifySearch';
-
+          // 🚀 Let discord-player auto-resolve the best source naturally
           const { track } = await player.play(voiceChannel, query, {
             requestedBy: interaction.user,
-            searchEngine: searchEngine, // <--- Passes the smart search logic
             nodeOptions: {
               metadata: interaction,
-              biquad: 'classic',
+              // Removed biquad filter to prevent immediate stream crashing
               leaveOnEnd: true,
               leaveOnEmpty: true
             }
