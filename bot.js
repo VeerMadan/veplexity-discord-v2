@@ -139,7 +139,6 @@ const player = new Player(client, { skipFFmpeg: false });
 
 // 🔧 1. Load the core extractors for broad searching
 // Register YouTube via youtubei FIRST — this is the reliable one
-import fs from 'fs'; // already imported near top of your file — remove this line if duplicate
 
 const cookiePath = process.env.YOUTUBE_COOKIE_PATH;
 const cookieString = cookiePath && fs.existsSync(cookiePath)
