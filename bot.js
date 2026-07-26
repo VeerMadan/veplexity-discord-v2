@@ -1,11 +1,10 @@
-import { YoutubeiExtractor } from 'discord-player-youtubei';
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { Client, GatewayIntentBits, EmbedBuilder } from 'discord.js';
-import { Player } from 'discord-player';
+import { Player, QueryType } from 'discord-player';
 
-import { DefaultExtractors } from '@discord-player/extractor';
+import { DefaultExtractors, SoundCloudExtractor } from '@discord-player/extractor';
 import ffmpeg from 'ffmpeg-static';
 
 // 🔧 CRITICAL FIXES
@@ -137,15 +136,24 @@ const player = new Player(client, { skipFFmpeg: false });
 //commenting out the above line because it was causing issues with the latest version of discord-player
 //and this mf costed me 3 hours of debugging. The new version of discord-player has built-in support for YouTube, so we don't need to register the extractor manually anymore.
 
-// 🔧 1. Load defaults to get the official Spotify search engine
-await player.extractors.loadMulti(DefaultExtractors).catch(console.error);
+// 🔧 1. Load the core extractors for broad searching
+const extractors = DefaultExtractors.filter(ext => ext !== SoundCloudExtractor);
+await player.extractors.loadMulti(extractors).catch(console.error);
 
-// 🔧 2. Override YouTube with the Android client to bypass the 1-millisecond crash block!
-await player.extractors.register(YoutubeiExtractor, {
-    streamOptions: {
-        useClient: 'ANDROID' // This is the magic key that stops YouTube from blocking the stream
-    }
-}).catch(console.error);
+// 🔊 Player-level error logging (fixes silent join+leave bug)
+player.events.on('playerError', (queue, error) => {
+    console.error(`[Player Error] Guild ${queue.guild.id}:`, error);
+});
+player.events.on('error', (queue, error) => {
+    console.error(`[Queue Error] Guild ${queue.guild.id}:`, error);
+});
+player.events.on('emptyChannel', (queue) => {
+    console.log(`[Info] Left ${queue.guild.name} — voice channel empty.`);
+});
+player.events.on('disconnect', (queue) => {
+    console.log(`[Info] Manually disconnected from ${queue.guild.name}.`);
+});
+
 
 client.once('clientReady', () => console.log(`🤖 Logged in as ${client.user.tag}`));
 
@@ -158,21 +166,27 @@ client.on('interactionCreate', async (interaction) => {
       if (!query || query.trim().length < 2) return interaction.respond([]);
       
       try {
-          // 🚀 FORCED SPOTIFY: No more SoundCloud bootlegs or remixes
+          // 🚀 Let the auto engine handle it to prevent strict-engine crashes
           const results = await player.search(query, { 
               requestedBy: interaction.user,
-              searchEngine: 'spotifySearch' 
+              searchEngine: QueryType.YOUTUBE_SEARCH
           });
 
           if (!results || !results.hasTracks()) return interaction.respond([]);
 
+          const filtered = results.tracks.filter(t => 
+              !/remix|cover|sped up|slowed|8d|nightcore|mashup/i.test(t.title)
+          );
+          const finalTracks = filtered.length ? filtered : results.tracks;
+
           return interaction.respond(
-              results.tracks.slice(0, 10).map(t => ({
+              finalTracks.slice(0, 10).map(t => ({
                   name: `${t.title} - ${t.author}`.slice(0, 100),
                   value: t.url.slice(0, 100)
               }))
           );
       } catch (e) {
+          // Silent catch so Discord doesn't crash on timeouts
           return interaction.respond([]).catch(() => {});
       }
   }
@@ -392,14 +406,13 @@ case 'play': {
         if (!voiceChannel) return interaction.editReply('❌ Join a voice channel first.');
         
         try {
-          // 🚀 SMART ROUTING: If it's a URL, play it. If it's raw text, force Spotify search.
-          const engine = query.startsWith('http') ? 'auto' : 'spotifySearch';
-
+          // 🚀 Let discord-player auto-resolve the best source naturally
           const { track } = await player.play(voiceChannel, query, {
             requestedBy: interaction.user,
-            searchEngine: engine,
+            searchEngine: QueryType.YOUTUBE_SEARCH,
             nodeOptions: {
               metadata: interaction,
+              // Removed biquad filter to prevent immediate stream crashing
               leaveOnEnd: true,
               leaveOnEmpty: true
             }
