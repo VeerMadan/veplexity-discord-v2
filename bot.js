@@ -1,4 +1,4 @@
-
+import { YoutubeiExtractor } from 'discord-player-youtubei';
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
@@ -137,9 +137,15 @@ const player = new Player(client, { skipFFmpeg: false });
 //commenting out the above line because it was causing issues with the latest version of discord-player
 //and this mf costed me 3 hours of debugging. The new version of discord-player has built-in support for YouTube, so we don't need to register the extractor manually anymore.
 
-// 🔧 1. Load the core extractors for broad searching
+// 🔧 1. Load defaults to get the official Spotify search engine
 await player.extractors.loadMulti(DefaultExtractors).catch(console.error);
 
+// 🔧 2. Override YouTube with the Android client to bypass the 1-millisecond crash block!
+await player.extractors.register(YoutubeiExtractor, {
+    streamOptions: {
+        useClient: 'ANDROID' // This is the magic key that stops YouTube from blocking the stream
+    }
+}).catch(console.error);
 
 client.once('clientReady', () => console.log(`🤖 Logged in as ${client.user.tag}`));
 
@@ -152,9 +158,10 @@ client.on('interactionCreate', async (interaction) => {
       if (!query || query.trim().length < 2) return interaction.respond([]);
       
       try {
-          // 🚀 Let the auto engine handle it to prevent strict-engine crashes
+          // 🚀 FORCED SPOTIFY: No more SoundCloud bootlegs or remixes
           const results = await player.search(query, { 
-              requestedBy: interaction.user
+              requestedBy: interaction.user,
+              searchEngine: 'spotifySearch' 
           });
 
           if (!results || !results.hasTracks()) return interaction.respond([]);
@@ -166,7 +173,6 @@ client.on('interactionCreate', async (interaction) => {
               }))
           );
       } catch (e) {
-          // Silent catch so Discord doesn't crash on timeouts
           return interaction.respond([]).catch(() => {});
       }
   }
@@ -386,12 +392,14 @@ case 'play': {
         if (!voiceChannel) return interaction.editReply('❌ Join a voice channel first.');
         
         try {
-          // 🚀 Let discord-player auto-resolve the best source naturally
+          // 🚀 SMART ROUTING: If it's a URL, play it. If it's raw text, force Spotify search.
+          const engine = query.startsWith('http') ? 'auto' : 'spotifySearch';
+
           const { track } = await player.play(voiceChannel, query, {
             requestedBy: interaction.user,
+            searchEngine: engine,
             nodeOptions: {
               metadata: interaction,
-              // Removed biquad filter to prevent immediate stream crashing
               leaveOnEnd: true,
               leaveOnEmpty: true
             }
