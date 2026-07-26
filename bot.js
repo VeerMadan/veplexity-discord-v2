@@ -160,6 +160,12 @@ client.lavalink.on('trackStart', (player, track) => {
     const channel = client.channels.cache.get(player.textChannelId);
     if (channel) channel.send(`🎶 Now playing: **${track.info.title}** by **${track.info.author}**`).catch(() => null);
 });
+client.lavalink.on('trackError', (player, track, payload) => {
+    console.error(`❌ Track Error for ${track.info.title}:`, payload.error);
+});
+client.lavalink.on('trackStuck', (player, track, payload) => {
+    console.error(`⚠️ Track Stuck for ${track.info.title}:`, payload);
+});
 
 
 client.once('clientReady', () => {
