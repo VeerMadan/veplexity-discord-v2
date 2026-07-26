@@ -140,7 +140,8 @@ const player = new Player(client, { skipFFmpeg: false });
 // 🔧 1. Load the core extractors for broad searching
 // Register YouTube via youtubei FIRST — this is the reliable one
 await player.extractors.register(YoutubeiExtractor, {
-    streamOptions: { useClient: 'ANDROID' } // ANDROID client dodges throttling better than WEB right now
+    streamOptions: { useClient: 'WEB' }, // WEB client is required for PO token support
+    generateWithPoToken: true // YouTube now requires this for stream requests — fixes the 400 error
 }).catch(console.error);
 
 const extractors = DefaultExtractors.filter(ext => ext !== SoundCloudExtractor);
@@ -175,20 +176,26 @@ client.on('interactionCreate', async (interaction) => {
       
       try {
           // 🚀 Let the auto engine handle it to prevent strict-engine crashes
-          const results = await player.search(query, { 
-              requestedBy: interaction.user
-          });
+          const [spotifyResults, ytResults] = await Promise.all([
+              player.search(query, { requestedBy: interaction.user, searchEngine: QueryType.SPOTIFY_SEARCH }).catch(() => null),
+              player.search(query, { requestedBy: interaction.user, searchEngine: QueryType.YOUTUBE_SEARCH }).catch(() => null)
+          ]);
 
-          if (!results || !results.hasTracks()) return interaction.respond([]);
+          const spotifyTracks = spotifyResults?.hasTracks() ? spotifyResults.tracks.slice(0, 5) : [];
+          const ytTracks = ytResults?.hasTracks() 
+              ? ytResults.tracks.filter(t => !/remix|cover|sped up|slowed|8d|nightcore|mashup/i.test(t.title)).slice(0, 5)
+              : [];
 
-          const filtered = results.tracks.filter(t => 
-              !/remix|cover|sped up|slowed|8d|nightcore|mashup/i.test(t.title)
-          );
-          const finalTracks = filtered.length ? filtered : results.tracks;
+          const combined = [
+              ...spotifyTracks.map(t => ({ t, tag: '🟢' })),
+              ...ytTracks.map(t => ({ t, tag: '🔴' }))
+          ];
+
+          if (!combined.length) return interaction.respond([]);
 
           return interaction.respond(
-              finalTracks.slice(0, 10).map(t => ({
-                  name: `${t.title} - ${t.author}`.slice(0, 100),
+              combined.slice(0, 10).map(({ t, tag }) => ({
+                  name: `${tag} ${t.title} - ${t.author}`.slice(0, 100),
                   value: t.url.slice(0, 100)
               }))
           );
