@@ -129,7 +129,7 @@ async function sendModLog(interaction, embed) {
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages],
 });
-
+//aise hi
 client.on('error', err => console.log(`[Discord Client Error] ${err.message}`));
 
 const player = new Player(client, { skipFFmpeg: false });
