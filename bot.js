@@ -151,26 +151,27 @@ client.once('clientReady', () => console.log(`🤖 Logged in as ${client.user.ta
 client.on('interactionCreate', async (interaction) => {
  if (interaction.isAutocomplete()) {
       const query = interaction.options.getString('query');
-      if (!query) return interaction.respond([]);
+      if (!query || query.trim().length < 2) return interaction.respond([]);
       
       try {
-          // 🚀 We leave the searchEngine open so it pulls multiple results across platforms
+          // 🚀 Explicitly use 'youtubeSearch' (fast HTTP fetch) to bypass heavy yt-dlp spawning while typing
           const results = await player.search(query, { 
-              requestedBy: interaction.user
+              requestedBy: interaction.user,
+              searchEngine: 'youtubeSearch' 
           });
 
-          if (!results.hasTracks()) return interaction.respond([]);
+          if (!results || !results.hasTracks()) return interaction.respond([]);
 
-          // 🚀 Returns the top 10 matching results for you to pick from
+          // 🚀 Return top 10 options cleanly
           return interaction.respond(
               results.tracks.slice(0, 10).map(t => ({
                   name: `${t.title} - ${t.author}`.slice(0, 100),
-                  value: t.url.slice(0, 100) 
+                  value: t.url.slice(0, 100)
               }))
           );
       } catch (e) {
-          console.error("Autocomplete error:", e);
-          return interaction.respond([]);
+          // If a request takes too long, safely exit without breaking Discord
+          return interaction.respond([]).catch(() => {});
       }
   }
 
