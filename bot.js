@@ -451,6 +451,7 @@ case 'summon': {
             'https://media1.tenor.com/m/PNwNplsY5EsAAAAd/anime-edo-tensei.gif',
         ];
         const gif = summonGifs[Math.floor(Math.random() * summonGifs.length)];
+        console.log(`[Summon Debug] Picked gif: ${gif}`);
 
         const summonPhrases = [
             `🔮 <@${interaction.user.id}> has summoned <@${targetUser.id}> from the shadow realm!`,
