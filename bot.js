@@ -176,6 +176,15 @@ client.lavalink.on('trackError', (player, track, payload) => {
 client.lavalink.on('trackStuck', (player, track, payload) => {
     console.error(`⚠️ Track Stuck for ${track.info.title}:`, JSON.stringify(payload, null, 2));
 });
+client.lavalink.on('playerDestroy', (player) => {
+    console.log(`[Debug] Lavalink player destroyed for guild ${player.guildId}.`);
+});
+client.on('voiceStateUpdate', (oldState, newState) => {
+    if (oldState.member?.id !== client.user.id) return;
+    if (oldState.channelId && !newState.channelId) {
+        console.log(`[Debug] Bot left voice in guild ${oldState.guild.id} — was in channel ${oldState.channelId}.`);
+    }
+});
 
 
 client.once('clientReady', () => {
@@ -433,22 +442,32 @@ case 'summon': {
             'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3YXZqbHlrOTA4MHNnZGYzZjdhZDdjY2R6aGIwOWJqeHIwMjBvYzE3YSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/eQACuze30PkNiS1eb7/giphy.gif',
             'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMHIxd3VkYzRybmwwN2RoczJrYWlhc2o5ZGg5ejV6cXlyeHJ6cTBlZyZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/2Y9eQob7S7ighEhv3y/giphy.gif',
             'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMHIxd3VkYzRybmwwN2RoczJrYWlhc2o5ZGg5ejV6cXlyeHJ6cTBlZyZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/gr7ekRT0Jzmi6mdpPy/giphy.gif',
-            'https://tenor.com/en-IN/view/obito-uchiha-obito-naruto-naruto-shippuden-gif-25032724',
-            'https://tenor.com/en-IN/view/invocation-naruto-hand-seals-anime-gif-16713463',
-            'https://tenor.com/en-IN/view/tenten-summoning-smoke-naruto-naruto-shippuden-gif-17470210',
-            'https://tenor.com/en-IN/view/orochimaru-reanimation-jutsu-naruto-gif-11623667',
-            'https://tenor.com/en-IN/view/madara-gif-21909255',
-            'https://tenor.com/en-IN/view/madara-gif-22064055',
-            'https://tenor.com/en-IN/view/anime-edo-tensei-kabuto-yakushi-naruto-snake-sage-mode-gif-12789687',
+            'https://media1.tenor.com/m/5dDtXSVG7W0AAAAd/obito-uchiha-obito.gif',
+            'https://media1.tenor.com/m/ig3fiIxZvOgAAAAd/invocation-naruto.gif',
+            'https://media1.tenor.com/m/_BOcFSneKjwAAAAd/tenten-summoning.gif',
+            'https://media1.tenor.com/m/H9Zf2hKDiIIAAAAd/orochimaru-reanimation-jutsu.gif',
+            'https://media1.tenor.com/m/C8LQRFD4uEcAAAAd/madara.gif',
+            'https://media1.tenor.com/m/u0nCblnoMz8AAAAd/madara.gif',
+            'https://media1.tenor.com/m/PNwNplsY5EsAAAAd/anime-edo-tensei.gif',
         ];
         const gif = summonGifs[Math.floor(Math.random() * summonGifs.length)];
 
+        const summonPhrases = [
+            `🔮 <@${interaction.user.id}> has summoned <@${targetUser.id}> from the shadow realm!`,
+            `📜 By ancient decree, <@${interaction.user.id}> summons thee, <@${targetUser.id}>!`,
+            `🌀 <@${interaction.user.id}> performed the Summoning Jutsu... <@${targetUser.id}> has appeared!`,
+            `⚡ <@${interaction.user.id}> rang the bell. <@${targetUser.id}>, your presence is required immediately.`,
+            `🕯️ A circle was drawn. A name was spoken. <@${targetUser.id}>, you have been called by <@${interaction.user.id}>.`,
+            `📯 Hear ye, hear ye — <@${interaction.user.id}> summons <@${targetUser.id}> to this realm!`,
+            `🧙 <@${interaction.user.id}> cast a summoning spell. <@${targetUser.id}> had no choice but to appear.`
+        ];
+        const message = summonPhrases[Math.floor(Math.random() * summonPhrases.length)];
+
         return interaction.editReply({
-            content: `🔮 <@${interaction.user.id}> summoned <@${targetUser.id}>!`,
+            content: message,
             embeds: [{ image: { url: gif } }]
         });
       }
-
 
 case 'connect': {
         const voiceChannel = interaction.member.voice.channel;
@@ -464,7 +483,8 @@ case 'connect': {
             });
         }
         if (!lavaPlayer.connected) await lavaPlayer.connect();
-        return interaction.editReply(`🔌 Connected to **${voiceChannel.name}**.`);
+        guild247.add(interaction.guildId);
+        return interaction.editReply(`🔌 Connected to **${voiceChannel.name}** and staying put (use \`/disconnect\` to leave).`);
       }
 
       case 'disconnect': {
