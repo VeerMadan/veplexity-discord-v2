@@ -138,7 +138,7 @@ const commands = [
   {
     name: 'volume',
     description: 'Set playback volume',
-    options: [{ name: 'level', type: 4, required: true, description: '0-150' }],
+    options: [{ name: 'level', type: 4, required: true, description: 'Volume level, 0 to 150' }],
   },
   {
     name: 'loop',
@@ -184,6 +184,9 @@ const commands = [
     ]
   }
 ];
+
+console.log(`[Debug] Total commands: ${commands.length}`);
+commands.forEach((c, i) => console.log(`${i}: ${c.name}`));
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
