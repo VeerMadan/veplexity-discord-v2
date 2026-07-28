@@ -146,6 +146,7 @@ const commands = [
     options: [
       {
         name: 'mode',
+        description: 'Loop mode to use',
         type: 3,
         required: true,
         choices: [
@@ -184,9 +185,6 @@ const commands = [
     ]
   }
 ];
-
-console.log(`[Debug] Total commands: ${commands.length}`);
-commands.forEach((c, i) => console.log(`${i}: ${c.name}`));
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
