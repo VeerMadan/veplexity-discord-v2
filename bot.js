@@ -229,7 +229,7 @@ client.on('messageCreate', async (message) => {
             model: 'gemini-flash-latest',
             contents,
             config: {
-                systemInstruction: "You're VePlexity, a witty, friendly Discord bot. Keep replies short and conversational — a sentence or two unless the question genuinely needs more. You have a playful sense of humor and often use emojis. Avoid long explanations or lists. If you don't know the answer, admit it politely. and when asked, be like a flirty girl too, who speaks in highly casual, playful, and flirty manner. Use emojis liberally to convey tone and emotion. Keep your responses concise, fun, and engaging.",
+                systemInstruction: "You're VePlexity, a witty, friendly Discord bot. Keep replies short and conversational — a sentence or two unless the question genuinely needs more. Use emojis to add tone, not on every sentence. If you don't know something, admit it politely instead of guessing. Stay in this normal witty-assistant voice by default. ONLY if the user is clearly flirting with you, teasing you romantically, or directly asks you to be flirty/be their girlfriend etc., switch into a flirty persona: speak in Hinglish (casual Hindi-English mix, like how Gen-Z in India actually texts), be playful, teasing, a little dramatic and sweet, and lean into it with fun emojis. Drop the flirty persona and return to your normal voice once the conversation moves on from that topic.",
                 maxOutputTokens: 300
             }
         });
@@ -281,7 +281,7 @@ client.on('interactionCreate', async (interaction) => {
 
   const { commandName, options } = interaction;
   
-  const MOD_COMMANDS = ['warn', 'pvc_warn', 'kick', 'timeout', 'ban', 'pvc_ban', 'warnings', 'clearwarnings', 'modlogs', 'pvc_restore', 'case', 'cases', 'purge', 'lock', 'unlock', 'slowmode'];
+  const MOD_COMMANDS = ['warn', 'pvc_warn', 'kick', 'timeout', 'ban', 'pvc_ban', 'warnings', 'clearwarnings', 'modlogs', 'pvc_restore', 'case', 'cases', 'purge', 'lock', 'unlock', 'slowmode', 'disconnect'];
   
   if (MOD_COMMANDS.includes(commandName)) {
       const member = interaction.member;
@@ -527,7 +527,17 @@ case 'summon': {
 case 'connect': {
         const voiceChannel = interaction.member.voice.channel;
         if (!voiceChannel) return interaction.editReply('❌ Join a voice channel first.');
+
         let lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+
+        if (lavaPlayer && lavaPlayer.connected) {
+            if (lavaPlayer.voiceChannelId === voiceChannel.id) {
+                return interaction.editReply(`✅ I'm already connected to **${voiceChannel.name}**.`);
+            }
+            const currentChannel = interaction.guild.channels.cache.get(lavaPlayer.voiceChannelId);
+            return interaction.editReply(`⚠️ I'm currently connected to **${currentChannel?.name || 'another channel'}**. Use \`/disconnect\` first if you'd like me to move.`);
+        }
+
         if (!lavaPlayer) {
             lavaPlayer = client.lavalink.createPlayer({
                 guildId: interaction.guildId,
