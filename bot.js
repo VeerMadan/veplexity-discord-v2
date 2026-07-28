@@ -281,8 +281,14 @@ client.on('messageCreate', async (message) => {
         history.push({ role: 'user', parts: [{ text: question }] });
         history.push({ role: 'model', parts: [{ text: reply }] });
         channelMemory.set(message.channelId, history.slice(-10)); // keep last 5 exchanges
-    } catch (error) {
-        console.error('[Chatbot Error]', error);
+   } catch (error) {
+        console.error('[Chatbot Error]', error.message);
+        
+        // Check if it's a 429 Rate Limit error
+        if (error.status === 429) {
+            return message.reply("⏳ Whoa, too many people talking to me at once! Google just rate-limited my brain. Give me about 30 seconds to catch my breath.").catch(() => null);
+        }
+
         await message.reply("❌ Brain's not working right now, try again in a bit.").catch(() => null);
     }
 });
@@ -835,9 +841,15 @@ case 'connect': {
             const roast = response.text?.trim() || `${target.username} is so boring even I couldn't think of a roast.`;
             return interaction.editReply(`🔥 <@${target.id}>: ${roast}`);
         } catch (e) {
-            console.error('[Roast Error]', e);
-            return interaction.editReply('❌ Roast generator is out of ammo right now.');
+            console.error('[Chatbot Error]', error.message);
+        
+        // Check if it's a 429 Rate Limit error
+        if (error.status === 429) {
+            return message.reply("⏳ Whoa, too many people talking to me at once! Google just rate-limited my brain. Give me about 30 seconds to catch my breath.").catch(() => null);
         }
+
+        await message.reply("❌ Brain's not working right now, try again in a bit.").catch(() => null);
+    }
       }
 
       case 'compliment': {
@@ -851,10 +863,15 @@ case 'connect': {
             const compliment = response.text?.trim() || `${target.username} is pretty great, honestly.`;
             return interaction.editReply(`💐 <@${target.id}>: ${compliment}`);
         } catch (e) {
-            console.error('[Compliment Error]', e);
-            return interaction.editReply('❌ Compliment generator is having a moment.');
+           console.error('[Chatbot Error]', error.message);
+        
+        // Check if it's a 429 Rate Limit error
+        if (error.status === 429) {
+            return message.reply("⏳ Whoa, too many people talking to me at once! Google just rate-limited my brain. Give me about 30 seconds to catch my breath.").catch(() => null);
         }
-      }
+
+        await message.reply("❌ Brain's not working right now, try again in a bit.").catch(() => null);
+    }
 
       case 'emojify': {
         const text = options.getString('text');
