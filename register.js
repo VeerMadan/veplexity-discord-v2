@@ -131,6 +131,32 @@ const commands = [
   },
   { name: 'stop', description: 'Stop music and leave VC' },
   { name: 'skip', description: 'Skip song' },
+  { name: 'nowplaying', description: 'Show the currently playing track' },
+  { name: 'pause', description: 'Pause the current track' },
+  { name: 'resume', description: 'Resume playback' },
+  { name: 'queue', description: 'Show the current queue' },
+  {
+    name: 'volume',
+    description: 'Set playback volume',
+    options: [{ name: 'level', type: 4, required: true, description: '0-150' }],
+  },
+  {
+    name: 'loop',
+    description: 'Set loop mode',
+    options: [
+      {
+        name: 'mode',
+        type: 3,
+        required: true,
+        choices: [
+          { name: 'off', value: 'off' },
+          { name: 'track', value: 'track' },
+          { name: 'queue', value: 'queue' },
+        ],
+      },
+    ],
+  },
+  { name: 'shuffle', description: 'Shuffle the queue' },
   {
     name: 'summon',
     description: 'Summon someone with a dramatic gif',

@@ -125,6 +125,14 @@ async function sendModLog(interaction, embed) {
 /* =========================
    BOT CLIENT & PLAYER
 ========================= */
+function formatMs(ms) {
+  if (!ms || ms < 0) return '0:00';
+  const totalSec = Math.floor(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
@@ -579,6 +587,74 @@ case 'connect': {
         }
         saveData(database);
         return interaction.editReply(`🤖 Chatbot mode **${setting === 'on' ? 'enabled' : 'disabled'}**. ${setting === 'on' ? 'Mention me anywhere and I\'ll respond!' : ''}`);
+      }
+
+      case 'nowplaying': {
+        const lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+        if (!lavaPlayer || !lavaPlayer.queue.current) return interaction.editReply('❌ Nothing is playing right now.');
+        const track = lavaPlayer.queue.current;
+        const position = lavaPlayer.position || 0;
+        const duration = track.info.length || 0;
+        const barLength = 20;
+        const filled = duration ? Math.round((position / duration) * barLength) : 0;
+        const bar = '▬'.repeat(Math.max(filled - 1, 0)) + '🔘' + '▬'.repeat(Math.max(barLength - filled, 0));
+        return interaction.editReply(`🎶 **Now Playing:** ${track.info.title} — ${track.info.author}\n\`${formatMs(position)}\` ${bar} \`${formatMs(duration)}\``);
+      }
+
+      case 'pause': {
+        const lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+        if (!lavaPlayer || !lavaPlayer.playing) return interaction.editReply('❌ Nothing is playing.');
+        if (lavaPlayer.paused) return interaction.editReply('⏸️ Already paused.');
+        await lavaPlayer.pause();
+        return interaction.editReply('⏸️ Paused.');
+      }
+
+      case 'resume': {
+        const lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+        if (!lavaPlayer) return interaction.editReply('❌ Nothing to resume.');
+        if (!lavaPlayer.paused) return interaction.editReply('▶️ Already playing.');
+        await lavaPlayer.resume();
+        return interaction.editReply('▶️ Resumed.');
+      }
+
+      case 'queue': {
+        const lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+        if (!lavaPlayer || (!lavaPlayer.queue.current && !lavaPlayer.queue.tracks.length)) {
+            return interaction.editReply('❌ Queue is empty.');
+        }
+        const current = lavaPlayer.queue.current;
+        const upcoming = lavaPlayer.queue.tracks.slice(0, 10);
+        let msg = current ? `**Now Playing:** ${current.info.title}\n\n` : '';
+        msg += upcoming.length
+            ? upcoming.map((t, i) => `${i + 1}. ${t.info.title} — ${t.info.author}`).join('\n')
+            : '_Nothing queued up next._';
+        if (lavaPlayer.queue.tracks.length > 10) msg += `\n...and ${lavaPlayer.queue.tracks.length - 10} more.`;
+        return interaction.editReply(msg);
+      }
+
+      case 'volume': {
+        const lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+        if (!lavaPlayer) return interaction.editReply('❌ I need to be connected first.');
+        const level = options.getInteger('level');
+        if (level < 0 || level > 150) return interaction.editReply('❌ Volume must be between 0 and 150.');
+        await lavaPlayer.setVolume(level);
+        return interaction.editReply(`🔊 Volume set to **${level}%**.`);
+      }
+
+      case 'loop': {
+        const lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+        if (!lavaPlayer) return interaction.editReply('❌ I need to be connected first.');
+        const mode = options.getString('mode');
+        await lavaPlayer.setRepeatMode(mode);
+        const labels = { off: '➡️ Loop disabled.', track: '🔂 Looping current track.', queue: '🔁 Looping the queue.' };
+        return interaction.editReply(labels[mode]);
+      }
+
+      case 'shuffle': {
+        const lavaPlayer = client.lavalink.getPlayer(interaction.guildId);
+        if (!lavaPlayer || lavaPlayer.queue.tracks.length < 2) return interaction.editReply('❌ Not enough tracks in queue to shuffle.');
+        await lavaPlayer.queue.shuffle();
+        return interaction.editReply('🔀 Queue shuffled.');
       }
 
       case 'play': {
