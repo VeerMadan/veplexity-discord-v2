@@ -46,6 +46,34 @@ database.cases ??= {};
 database.caseCounter ??= 0;
 database.chatbotGuilds ??= [];
 database.pvcRevoked ??= [];
+database.notes ??= {};
+
+async function fetchNekoGif(category) {
+    try {
+        const res = await fetch(`https://nekos.best/api/v2/${category}`);
+        const data = await res.json();
+        return data.results?.[0]?.url || null;
+    } catch {
+        return null;
+    }
+}
+
+const ACTION_VERBS = {
+    pat: 'pats', hug: 'hugs', kiss: 'kisses', slap: 'slaps',
+    bite: 'bites', tickle: 'tickles', cuddle: 'cuddles', poke: 'pokes'
+};
+
+async function handleActionCommand(interaction, category) {
+    const target = interaction.options.getUser('user');
+    const gif = await fetchNekoGif(category);
+    const verb = ACTION_VERBS[category] || category;
+    const selfAction = target.id === interaction.user.id;
+    const text = selfAction
+        ? `${interaction.user.username} ${verb} themselves... okay then 😅`
+        : `**${interaction.user.username}** ${verb} **${target.username}**!`;
+    if (!gif) return interaction.editReply(text);
+    return interaction.editReply({ content: text, embeds: [{ image: { url: gif } }] });
+}
 
 function createCase(interaction, action, userId, reason) {
   database.caseCounter++;
@@ -294,7 +322,7 @@ client.on('interactionCreate', async (interaction) => {
 
   const { commandName, options } = interaction;
   
-  const MOD_COMMANDS = ['warn', 'pvc_warn', 'kick', 'timeout', 'ban', 'unban', 'pvc_ban', 'warnings', 'clearwarnings', 'modlogs', 'pvc_restore', 'case', 'cases', 'purge', 'lock', 'unlock', 'slowmode', 'disconnect'];
+  const MOD_COMMANDS = ['warn', 'pvc_warn', 'kick', 'timeout', 'ban', 'unban', 'pvc_ban', 'warnings', 'clearwarnings', 'modlogs', 'pvc_restore', 'case', 'cases', 'purge', 'lock', 'unlock', 'slowmode', 'disconnect', 'note', 'notes', 'nickname', 'lockdown', 'unlockdown', 'masskick', 'massban', 'muteall', 'unmuteall'];
   
   if (MOD_COMMANDS.includes(commandName)) {
       const member = interaction.member;
@@ -751,6 +779,355 @@ case 'connect': {
             }
         });
 
+        break;
+      }
+
+      case 'pat': case 'hug': case 'kiss': case 'slap': case 'bite': case 'tickle': case 'cuddle': case 'poke': {
+        await handleActionCommand(interaction, commandName);
+        break;
+      }
+
+      case 'fact': {
+        const facts = [
+            "Bananas are berries, but strawberries aren't.",
+            "Octopuses have three hearts.",
+            "A day on Venus is longer than a year on Venus.",
+            "Honey never spoils — archaeologists have found 3000-year-old honey that's still edible.",
+            "Wombat poop is cube-shaped.",
+            "The Eiffel Tower grows taller in summer due to heat expansion.",
+            "Sharks existed before trees.",
+            "There are more possible chess games than atoms in the observable universe.",
+            "Sea otters hold hands while sleeping so they don't drift apart.",
+            "A group of flamingos is called a 'flamboyance'.",
+            "Your stomach gets an entirely new lining every 3-4 days.",
+            "Cows have best friends and get stressed when separated.",
+            "The shortest war in history lasted 38 minutes.",
+            "Bananas are slightly radioactive.",
+            "Scotland's national animal is the unicorn."
+        ];
+        return interaction.editReply(`🧠 ${facts[Math.floor(Math.random() * facts.length)]}`);
+      }
+
+      case 'wyr': {
+        const prompts = [
+            "have the ability to fly, or be invisible?",
+            "always be 10 minutes late, or always be 20 minutes early?",
+            "fight one horse-sized duck, or 100 duck-sized horses?",
+            "know when you're going to die, or how you're going to die?",
+            "have unlimited money but no friends, or unlimited friends but no money?",
+            "be able to talk to animals, or speak every human language?",
+            "lose all your memories, or never make new ones again?",
+            "live without music, or live without movies?",
+            "always say what's on your mind, or never speak again?",
+            "have a rewind button, or a pause button on life?"
+        ];
+        return interaction.editReply(`🤔 Would you rather ${prompts[Math.floor(Math.random() * prompts.length)]}`);
+      }
+
+      case 'roast': {
+        const target = options.getUser('user');
+        try {
+            const response = await gemini.models.generateContent({
+                model: 'gemini-flash-latest',
+                contents: [{ role: 'user', parts: [{ text: `Write a short, funny, PG-13 roast (1-2 sentences) aimed playfully at someone named ${target.username}. Keep it light and funny, not genuinely mean.` }] }],
+                config: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 200 }
+            });
+            const roast = response.text?.trim() || `${target.username} is so boring even I couldn't think of a roast.`;
+            return interaction.editReply(`🔥 <@${target.id}>: ${roast}`);
+        } catch (e) {
+            console.error('[Roast Error]', e);
+            return interaction.editReply('❌ Roast generator is out of ammo right now.');
+        }
+      }
+
+      case 'compliment': {
+        const target = options.getUser('user');
+        try {
+            const response = await gemini.models.generateContent({
+                model: 'gemini-flash-latest',
+                contents: [{ role: 'user', parts: [{ text: `Write a short, warm, genuine compliment (1-2 sentences) for someone named ${target.username}.` }] }],
+                config: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 200 }
+            });
+            const compliment = response.text?.trim() || `${target.username} is pretty great, honestly.`;
+            return interaction.editReply(`💐 <@${target.id}>: ${compliment}`);
+        } catch (e) {
+            console.error('[Compliment Error]', e);
+            return interaction.editReply('❌ Compliment generator is having a moment.');
+        }
+      }
+
+      case 'emojify': {
+        const text = options.getString('text');
+        const emojified = text.split('').map(ch => {
+            const lower = ch.toLowerCase();
+            if (/[a-z]/.test(lower)) return `:regional_indicator_${lower}:`;
+            if (ch === ' ') return '   ';
+            return ch;
+        }).join(' ');
+        return interaction.editReply(emojified.slice(0, 2000));
+      }
+
+      case 'serverinfo': {
+        const guild = interaction.guild;
+        const e = buildEmbed('Server Info', 'ℹ️', 0x3498db, [
+            { name: 'Name', value: guild.name, inline: true },
+            { name: 'Owner', value: `<@${guild.ownerId}>`, inline: true },
+            { name: 'Members', value: `${guild.memberCount}`, inline: true },
+            { name: 'Created', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`, inline: true },
+            { name: 'Boosts', value: `${guild.premiumSubscriptionCount || 0}`, inline: true },
+            { name: 'Channels', value: `${guild.channels.cache.size}`, inline: true },
+        ]);
+        return interaction.editReply({ embeds: [e] });
+      }
+
+      case 'roleinfo': {
+        const role = options.getRole('role');
+        const e = buildEmbed('Role Info', '🎭', role.color || 0x99aab5, [
+            { name: 'Name', value: role.name, inline: true },
+            { name: 'Members', value: `${role.members.size}`, inline: true },
+            { name: 'Position', value: `${role.position}`, inline: true },
+            { name: 'Mentionable', value: role.mentionable ? 'Yes' : 'No', inline: true },
+            { name: 'Created', value: `<t:${Math.floor(role.createdTimestamp / 1000)}:D>`, inline: true },
+        ]);
+        return interaction.editReply({ embeds: [e] });
+      }
+
+      case 'poll': {
+        const question = options.getString('question');
+        const pollMsg = await interaction.editReply({
+            embeds: [buildEmbed('Poll', '📊', 0x9b59b6, [{ name: question, value: `Asked by <@${interaction.user.id}>` }])],
+            fetchReply: true
+        });
+        await pollMsg.react('👍');
+        await pollMsg.react('👎');
+        break;
+      }
+
+      case 'remindme': {
+        const time = options.getString('time');
+        const text = options.getString('text');
+        const ms = parseDuration(time);
+        if (!ms) return interaction.editReply('❌ Invalid time format. Use e.g. 10m, 1h, 2d.');
+        if (ms > 7 * 24 * 60 * 60 * 1000) return interaction.editReply('❌ Max reminder time is 7 days.');
+        await interaction.editReply(`⏰ Got it — I'll remind you about "${text}" in ${time}. (Note: reminders don't survive a bot restart.)`);
+        setTimeout(() => {
+            interaction.user.send(`⏰ **Reminder:** ${text}`).catch(() => {
+                interaction.channel.send(`⏰ <@${interaction.user.id}> reminder: ${text}`).catch(() => null);
+            });
+        }, ms);
+        break;
+      }
+
+      case 'note': {
+        const user = options.getUser('user');
+        const text = options.getString('text');
+        database.notes[user.id] ??= [];
+        database.notes[user.id].push({ text, by: interaction.user.id, at: Date.now() });
+        saveData(database);
+        return interaction.editReply(`📝 Note added for <@${user.id}>.`);
+      }
+
+      case 'notes': {
+        const user = options.getUser('user');
+        const notes = database.notes[user.id] || [];
+        if (!notes.length) return interaction.editReply(`No notes on <@${user.id}>.`);
+        const list = notes.map((n, i) => `${i + 1}. ${n.text} — <t:${Math.floor(n.at / 1000)}:R>`).join('\n');
+        return interaction.editReply({ embeds: [buildEmbed(`Notes: ${user.username}`, '📝', 0x9b59b6, [{ name: 'Entries', value: list.slice(0, 1000) }])] });
+      }
+
+      case 'nickname': {
+        const user = options.getUser('user');
+        const newNick = options.getString('name');
+        const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+        if (!member) return interaction.editReply('❌ Member not found.');
+        await member.setNickname(newNick || null).catch(() => null);
+        return interaction.editReply(`✏️ Nickname for <@${user.id}> set to **${newNick || '(reset)'}**.`);
+      }
+
+      case 'lockdown': {
+        const channels = interaction.guild.channels.cache.filter(c => c.isTextBased() && !c.isThread());
+        let count = 0;
+        for (const [, ch] of channels) {
+            await ch.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: false }).catch(() => null);
+            count++;
+        }
+        return interaction.editReply(`🔒 Locked down **${count}** channels.`);
+      }
+
+      case 'unlockdown': {
+        const channels = interaction.guild.channels.cache.filter(c => c.isTextBased() && !c.isThread());
+        let count = 0;
+        for (const [, ch] of channels) {
+            await ch.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: null }).catch(() => null);
+            count++;
+        }
+        return interaction.editReply(`🔓 Unlocked **${count}** channels.`);
+      }
+
+      case 'masskick': {
+        const ids = options.getString('users').split(',').map(s => s.trim()).filter(Boolean);
+        const reason = options.getString('reason') || 'Mass kick';
+        let success = 0, fail = 0;
+        for (const id of ids) {
+            const member = await interaction.guild.members.fetch(id).catch(() => null);
+            if (member) { await member.kick(reason).then(() => success++).catch(() => fail++); }
+            else fail++;
+        }
+        createCase(interaction, 'masskick', ids.join(','), reason);
+        return interaction.editReply(`👢 Kicked **${success}** users. Failed: **${fail}**.`);
+      }
+
+      case 'massban': {
+        const ids = options.getString('users').split(',').map(s => s.trim()).filter(Boolean);
+        const reason = options.getString('reason') || 'Mass ban';
+        let success = 0, fail = 0;
+        for (const id of ids) {
+            await interaction.guild.members.ban(id, { reason }).then(() => success++).catch(() => fail++);
+        }
+        createCase(interaction, 'massban', ids.join(','), reason);
+        return interaction.editReply(`🔨 Banned **${success}** users. Failed: **${fail}**.`);
+      }
+
+      case 'muteall': {
+        const vc = interaction.member.voice.channel;
+        if (!vc) return interaction.editReply('❌ Join a voice channel first.');
+        let count = 0;
+        for (const [, member] of vc.members) { await member.voice.setMute(true).catch(() => null); count++; }
+        return interaction.editReply(`🔇 Muted **${count}** members in **${vc.name}**.`);
+      }
+
+      case 'unmuteall': {
+        const vc = interaction.member.voice.channel;
+        if (!vc) return interaction.editReply('❌ Join a voice channel first.');
+        let count = 0;
+        for (const [, member] of vc.members) { await member.voice.setMute(false).catch(() => null); count++; }
+        return interaction.editReply(`🔊 Unmuted **${count}** members in **${vc.name}**.`);
+      }
+
+      case 'connect4': {
+        const opponent = options.getUser('opponent');
+        if (opponent.bot) return interaction.editReply('❌ You can\'t challenge a bot.');
+        if (opponent.id === interaction.user.id) return interaction.editReply('❌ You can\'t challenge yourself.');
+
+        const ROWS = 6, COLS = 7;
+        const board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+        let currentPlayer = interaction.user.id;
+        const players = { [interaction.user.id]: '🔴', [opponent.id]: '🟡' };
+
+        function renderText() {
+            let out = '';
+            for (let r = 0; r < ROWS; r++) out += board[r].map(cell => cell || '⚪').join('') + '\n';
+            out += '1️⃣2️⃣3️⃣4️⃣5️⃣6️⃣7️⃣';
+            return out;
+        }
+        function dropPiece(col, symbol) {
+            for (let r = ROWS - 1; r >= 0; r--) if (!board[r][col]) { board[r][col] = symbol; return r; }
+            return -1;
+        }
+        function checkWin(symbol) {
+            for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+                if (board[r][c] !== symbol) continue;
+                for (const [dr, dc] of [[0,1],[1,0],[1,1],[1,-1]]) {
+                    let count = 1;
+                    for (let i = 1; i < 4; i++) {
+                        const nr = r + dr*i, nc = c + dc*i;
+                        if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS || board[nr][nc] !== symbol) break;
+                        count++;
+                    }
+                    if (count >= 4) return true;
+                }
+            }
+            return false;
+        }
+        function renderButtons(disabled) {
+            const row1 = new ActionRowBuilder().addComponents(
+                [0,1,2,3,4].map(c => new ButtonBuilder().setCustomId(`c4_${c}`).setLabel(`${c+1}`).setStyle(ButtonStyle.Secondary).setDisabled(disabled || board[0][c] !== null))
+            );
+            const row2 = new ActionRowBuilder().addComponents(
+                [5,6].map(c => new ButtonBuilder().setCustomId(`c4_${c}`).setLabel(`${c+1}`).setStyle(ButtonStyle.Secondary).setDisabled(disabled || board[0][c] !== null))
+            );
+            return [row1, row2];
+        }
+
+        const msg = await interaction.editReply({
+            content: `🔴 <@${interaction.user.id}> vs 🟡 <@${opponent.id}>\n${renderText()}\nTurn: <@${currentPlayer}>`,
+            components: renderButtons(false)
+        });
+        const collector = msg.createMessageComponentCollector({ time: 180000 });
+
+        collector.on('collect', async (btn) => {
+            if (btn.user.id !== currentPlayer) return btn.reply({ content: '⏳ Not your turn.', ephemeral: true });
+            const col = parseInt(btn.customId.split('_')[1]);
+            const symbol = players[currentPlayer];
+            if (dropPiece(col, symbol) === -1) return btn.deferUpdate();
+
+            if (checkWin(symbol)) {
+                await btn.update({ content: `🏆 <@${currentPlayer}> wins Connect 4!\n${renderText()}`, components: renderButtons(true) });
+                collector.stop();
+                return;
+            }
+            if (board.every(r => r.every(c => c))) {
+                await btn.update({ content: `🤝 It's a draw!\n${renderText()}`, components: renderButtons(true) });
+                collector.stop();
+                return;
+            }
+            currentPlayer = currentPlayer === interaction.user.id ? opponent.id : interaction.user.id;
+            await btn.update({
+                content: `🔴 <@${interaction.user.id}> vs 🟡 <@${opponent.id}>\n${renderText()}\nTurn: <@${currentPlayer}>`,
+                components: renderButtons(false)
+            });
+        });
+        collector.on('end', (collected, reason) => {
+            if (reason === 'time') interaction.editReply({ content: '⏱️ Game timed out.', components: renderButtons(true) }).catch(() => null);
+        });
+        break;
+      }
+
+      case 'rpsduel': {
+        const opponent = options.getUser('opponent');
+        if (opponent.bot) return interaction.editReply('❌ You can\'t challenge a bot.');
+        if (opponent.id === interaction.user.id) return interaction.editReply('❌ You can\'t challenge yourself.');
+
+        const choices = {};
+        const emoji = { rock: '🪨', paper: '📄', scissors: '✂️' };
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('rpsd_rock').setLabel('Rock 🪨').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('rpsd_paper').setLabel('Paper 📄').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('rpsd_scissors').setLabel('Scissors ✂️').setStyle(ButtonStyle.Secondary)
+        );
+        const msg = await interaction.editReply({
+            content: `⚔️ <@${interaction.user.id}> challenges <@${opponent.id}> to RPS! Both players pick your move (only you see your own pick).`,
+            components: [row]
+        });
+        const collector = msg.createMessageComponentCollector({ time: 60000 });
+
+        collector.on('collect', async (btn) => {
+            if (![interaction.user.id, opponent.id].includes(btn.user.id)) {
+                return btn.reply({ content: '❌ This isn\'t your duel.', ephemeral: true });
+            }
+            if (choices[btn.user.id]) return btn.reply({ content: '✅ You already picked.', ephemeral: true });
+            choices[btn.user.id] = btn.customId.split('_')[1];
+            await btn.reply({ content: `You picked ${emoji[choices[btn.user.id]]} ${choices[btn.user.id]}!`, ephemeral: true });
+
+            if (Object.keys(choices).length === 2) {
+                const p1 = interaction.user.id, p2 = opponent.id;
+                const c1 = choices[p1], c2 = choices[p2];
+                let result;
+                if (c1 === c2) result = "🤝 It's a tie!";
+                else if ((c1 === 'rock' && c2 === 'scissors') || (c1 === 'paper' && c2 === 'rock') || (c1 === 'scissors' && c2 === 'paper')) result = `🏆 <@${p1}> wins!`;
+                else result = `🏆 <@${p2}> wins!`;
+                await interaction.editReply({
+                    content: `⚔️ **Results:**\n<@${p1}>: ${emoji[c1]} ${c1}\n<@${p2}>: ${emoji[c2]} ${c2}\n\n${result}`,
+                    components: []
+                });
+                collector.stop();
+            }
+        });
+        collector.on('end', (collected, reason) => {
+            if (reason === 'time' && Object.keys(choices).length < 2) {
+                interaction.editReply({ content: '⏱️ Duel timed out — someone didn\'t pick in time.', components: [] }).catch(() => null);
+            }
+        });
         break;
       }
 

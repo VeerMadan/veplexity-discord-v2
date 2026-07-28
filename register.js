@@ -250,6 +250,77 @@ const commands = [
     description: 'Challenge someone to Tic-Tac-Toe',
     options: [{ name: 'opponent', description: 'Who to challenge', type: 6, required: true }],
   },
+  {
+    name: 'connect4',
+    description: 'Challenge someone to Connect 4',
+    options: [{ name: 'opponent', description: 'Who to challenge', type: 6, required: true }],
+  },
+  {
+    name: 'rpsduel',
+    description: 'Challenge someone to Rock Paper Scissors',
+    options: [{ name: 'opponent', description: 'Who to challenge', type: 6, required: true }],
+  },
+  { name: 'pat', description: 'Pat someone', options: [{ name: 'user', description: 'Who to pat', type: 6, required: true }] },
+  { name: 'hug', description: 'Hug someone', options: [{ name: 'user', description: 'Who to hug', type: 6, required: true }] },
+  { name: 'kiss', description: 'Kiss someone', options: [{ name: 'user', description: 'Who to kiss', type: 6, required: true }] },
+  { name: 'slap', description: 'Slap someone', options: [{ name: 'user', description: 'Who to slap', type: 6, required: true }] },
+  { name: 'bite', description: 'Bite someone', options: [{ name: 'user', description: 'Who to bite', type: 6, required: true }] },
+  { name: 'tickle', description: 'Tickle someone', options: [{ name: 'user', description: 'Who to tickle', type: 6, required: true }] },
+  { name: 'cuddle', description: 'Cuddle someone', options: [{ name: 'user', description: 'Who to cuddle', type: 6, required: true }] },
+  { name: 'poke', description: 'Poke someone', options: [{ name: 'user', description: 'Who to poke', type: 6, required: true }] },
+  { name: 'fact', description: 'Get a random fun fact' },
+  { name: 'wyr', description: 'Get a random "would you rather" prompt' },
+  { name: 'roast', description: 'Get an AI-generated roast', options: [{ name: 'user', description: 'Who to roast', type: 6, required: true }] },
+  { name: 'compliment', description: 'Get an AI-generated compliment', options: [{ name: 'user', description: 'Who to compliment', type: 6, required: true }] },
+  { name: 'emojify', description: 'Turn text into emoji letters', options: [{ name: 'text', description: 'Text to emojify', type: 3, required: true }] },
+  { name: 'serverinfo', description: 'Show server info' },
+  { name: 'roleinfo', description: 'Show role info', options: [{ name: 'role', description: 'Role to inspect', type: 8, required: true }] },
+  { name: 'poll', description: 'Create a yes/no poll', options: [{ name: 'question', description: 'Poll question', type: 3, required: true }] },
+  {
+    name: 'remindme',
+    description: 'Set a reminder',
+    options: [
+      { name: 'time', description: 'e.g. 10m, 1h, 2d', type: 3, required: true },
+      { name: 'text', description: 'What to remind you about', type: 3, required: true },
+    ],
+  },
+  {
+    name: 'note',
+    description: 'Add a private staff note about a user',
+    options: [
+      { name: 'user', description: 'User', type: 6, required: true },
+      { name: 'text', description: 'Note text', type: 3, required: true },
+    ],
+  },
+  { name: 'notes', description: "View a user's staff notes", options: [{ name: 'user', description: 'User', type: 6, required: true }] },
+  {
+    name: 'nickname',
+    description: "Change a user's nickname",
+    options: [
+      { name: 'user', description: 'User', type: 6, required: true },
+      { name: 'name', description: 'New nickname (leave blank to reset)', type: 3, required: false },
+    ],
+  },
+  { name: 'lockdown', description: 'Lock all text channels' },
+  { name: 'unlockdown', description: 'Unlock all text channels' },
+  {
+    name: 'masskick',
+    description: 'Kick multiple users at once',
+    options: [
+      { name: 'users', description: 'Comma-separated user IDs', type: 3, required: true },
+      { name: 'reason', description: 'Reason', type: 3, required: false },
+    ],
+  },
+  {
+    name: 'massban',
+    description: 'Ban multiple users at once',
+    options: [
+      { name: 'users', description: 'Comma-separated user IDs', type: 3, required: true },
+      { name: 'reason', description: 'Reason', type: 3, required: false },
+    ],
+  },
+  { name: 'muteall', description: 'Server-mute everyone in your current VC' },
+  { name: 'unmuteall', description: 'Unmute everyone in your current VC' },
 ];
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
