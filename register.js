@@ -37,14 +37,29 @@ const commands = [
   {
     name: 'unban',
     description: 'Unban a user',
-    options: [{ name: 'user', type: 6, required: true, description: 'User ID' }],
+    options: [{ name: 'user', type: 3, required: true, description: 'User ID (paste it, they cannot be @mentioned since they left)' }],
   },
   {
     name: 'timeout',
     description: 'Timeout a user',
     options: [
       { name: 'user', type: 6, required: true, description: 'User' },
-      { name: 'duration', type: 3, required: true, description: 'e.g. 10m' },
+      {
+        name: 'duration',
+        type: 3,
+        required: true,
+        description: 'How long to timeout for',
+        choices: [
+          { name: '60 seconds', value: '60s' },
+          { name: '5 minutes', value: '5m' },
+          { name: '10 minutes', value: '10m' },
+          { name: '30 minutes', value: '30m' },
+          { name: '1 hour', value: '1h' },
+          { name: '6 hours', value: '6h' },
+          { name: '1 day', value: '1d' },
+          { name: '1 week', value: '7d' },
+        ],
+      },
       { name: 'reason', type: 3, required: false, description: 'Reason' },
     ],
   },
@@ -229,6 +244,11 @@ const commands = [
     name: 'rate',
     description: 'Get a rating out of 10',
     options: [{ name: 'thing', description: 'What to rate', type: 3, required: true }],
+  },
+  {
+    name: 'tictactoe',
+    description: 'Challenge someone to Tic-Tac-Toe',
+    options: [{ name: 'opponent', description: 'Who to challenge', type: 6, required: true }],
   },
 ];
 

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import { Client, GatewayIntentBits, EmbedBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { LavalinkManager } from 'lavalink-client';
 import ffmpeg from 'ffmpeg-static';
 import { GoogleGenAI } from '@google/genai';
@@ -45,6 +45,7 @@ database.modLogs ??= {};
 database.cases ??= {};
 database.caseCounter ??= 0;
 database.chatbotGuilds ??= [];
+database.pvcRevoked ??= [];
 
 function createCase(interaction, action, userId, reason) {
   database.caseCounter++;
@@ -290,7 +291,7 @@ client.on('interactionCreate', async (interaction) => {
 
   const { commandName, options } = interaction;
   
-  const MOD_COMMANDS = ['warn', 'pvc_warn', 'kick', 'timeout', 'ban', 'pvc_ban', 'warnings', 'clearwarnings', 'modlogs', 'pvc_restore', 'case', 'cases', 'purge', 'lock', 'unlock', 'slowmode', 'disconnect'];
+  const MOD_COMMANDS = ['warn', 'pvc_warn', 'kick', 'timeout', 'ban', 'unban', 'pvc_ban', 'warnings', 'clearwarnings', 'modlogs', 'pvc_restore', 'case', 'cases', 'purge', 'lock', 'unlock', 'slowmode', 'disconnect'];
   
   if (MOD_COMMANDS.includes(commandName)) {
       const member = interaction.member;
@@ -298,7 +299,7 @@ client.on('interactionCreate', async (interaction) => {
                        member.permissions.has('Administrator') || 
                        member.roles.cache.some(r => ALLOWED_MOD_ROLE_IDS.includes(r.id));
       if (!hasPerms) {
-          return interaction.reply({ content: getRandomNoPermMessage(), ephemeral: true });
+          return interaction.reply({ content: getRandomNoPermMessage() });
       }
   }
 
@@ -403,8 +404,10 @@ client.on('interactionCreate', async (interaction) => {
         const member = await interaction.guild.members.fetch(user.id).catch(()=>null);
         if (!member) return interaction.editReply('❌ User not found.');
         
+        const durationMs = parseDuration(duration);
+        if (!durationMs) return interaction.editReply('❌ Invalid duration.');
         const caseId = createCase(interaction, 'timeout', user.id, reason);
-        await member.timeout(parseDuration(duration), reason);
+        await member.timeout(durationMs, reason);
         const e = buildEmbed('Member Timed Out', '⏳', 0x3498db, [{ name: 'User', value: `<@${user.id}>` }, { name: 'Duration', value: duration }, { name: 'Case', value: `#${caseId}` }]);
         await interaction.editReply({ embeds: [e] });
         await sendModLog(interaction, e);
@@ -450,6 +453,8 @@ client.on('interactionCreate', async (interaction) => {
         const reason = PVC_RULES[options.getString('rule')] || 'PVC Violation';
         const member = await interaction.guild.members.fetch(user.id).catch(()=>null);
         if (member) await member.roles.remove(PRIVATE_VC_ROLE_IDS).catch(()=>null);
+        if (!database.pvcRevoked.includes(user.id)) database.pvcRevoked.push(user.id);
+        saveData(database);
         const caseId = createCase(interaction, 'pvc_ban', user.id, reason);
         await interaction.editReply({ embeds: [buildEmbed('Private VC Revoked', '🚫', 0xe74c3c, [{ name: 'User', value: `<@${user.id}>` }, { name: 'Reason', value: reason }])] });
         break;
@@ -457,8 +462,13 @@ client.on('interactionCreate', async (interaction) => {
 
       case 'pvc_restore': {
         const user = options.getUser('user');
+        if (!database.pvcRevoked.includes(user.id)) {
+            return interaction.editReply(`❌ <@${user.id}> doesn't have revoked PVC access to restore.`);
+        }
         const member = await interaction.guild.members.fetch(user.id).catch(()=>null);
         if (member) await member.roles.add(PRIVATE_VC_ROLE_IDS).catch(()=>null);
+        database.pvcRevoked = database.pvcRevoked.filter(id => id !== user.id);
+        saveData(database);
         await interaction.editReply({ embeds: [buildEmbed('Private VC Restored', '🔓', 0x2ecc71, [{ name: 'User', value: `<@${user.id}>` }])] });
         break;
       }
@@ -657,6 +667,88 @@ case 'connect': {
         const thing = options.getString('thing');
         const rating = Math.floor(Math.random() * 11);
         return interaction.editReply(`📊 I'd rate **${thing}** a solid **${rating}/10**.`);
+      }
+
+      case 'tictactoe': {
+        const opponent = options.getUser('opponent');
+        if (opponent.bot) return interaction.editReply('❌ You can\'t challenge a bot.');
+        if (opponent.id === interaction.user.id) return interaction.editReply('❌ You can\'t challenge yourself.');
+
+        const board = Array(9).fill(null);
+        let currentPlayer = interaction.user.id;
+        const players = { [interaction.user.id]: '❌', [opponent.id]: '⭕' };
+
+        function renderBoard(winner) {
+            const rows = [];
+            for (let i = 0; i < 9; i += 3) {
+                rows.push(
+                    new ActionRowBuilder().addComponents(
+                        [0, 1, 2].map(j => {
+                            const idx = i + j;
+                            return new ButtonBuilder()
+                                .setCustomId(`ttt_${idx}`)
+                                .setLabel(board[idx] || '\u200b')
+                                .setStyle(board[idx] === '❌' ? ButtonStyle.Danger : board[idx] === '⭕' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+                                .setDisabled(!!board[idx] || !!winner);
+                        })
+                    )
+                );
+            }
+            return rows;
+        }
+
+        function checkWinner() {
+            const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+            for (const [a,b,c] of lines) {
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
+            }
+            if (board.every(cell => cell)) return 'draw';
+            return null;
+        }
+
+        const msg = await interaction.editReply({
+            content: `❌ <@${interaction.user.id}> vs ⭕ <@${opponent.id}>\nTurn: <@${currentPlayer}>`,
+            components: renderBoard(null)
+        });
+
+        const collector = msg.createMessageComponentCollector({ time: 120000 });
+
+        collector.on('collect', async (btn) => {
+            if (btn.user.id !== currentPlayer) {
+                return btn.reply({ content: '⏳ Not your turn.', ephemeral: true });
+            }
+            const idx = parseInt(btn.customId.split('_')[1]);
+            if (board[idx]) return btn.deferUpdate();
+
+            board[idx] = players[currentPlayer];
+            const winner = checkWinner();
+
+            if (winner === 'draw') {
+                await btn.update({ content: `🤝 It's a draw!`, components: renderBoard(true) });
+                collector.stop();
+                return;
+            }
+            if (winner) {
+                const winnerId = Object.keys(players).find(id => players[id] === winner);
+                await btn.update({ content: `🏆 <@${winnerId}> wins!`, components: renderBoard(true) });
+                collector.stop();
+                return;
+            }
+
+            currentPlayer = currentPlayer === interaction.user.id ? opponent.id : interaction.user.id;
+            await btn.update({
+                content: `❌ <@${interaction.user.id}> vs ⭕ <@${opponent.id}>\nTurn: <@${currentPlayer}>`,
+                components: renderBoard(null)
+            });
+        });
+
+        collector.on('end', (collected, reason) => {
+            if (reason === 'time') {
+                interaction.editReply({ content: '⏱️ Game timed out.', components: renderBoard(true) }).catch(() => null);
+            }
+        });
+
+        break;
       }
 
       case 'nowplaying': {
