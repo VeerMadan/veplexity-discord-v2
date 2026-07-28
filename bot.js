@@ -863,15 +863,14 @@ case 'connect': {
             const compliment = response.text?.trim() || `${target.username} is pretty great, honestly.`;
             return interaction.editReply(`💐 <@${target.id}>: ${compliment}`);
         } catch (e) {
-           console.error('[Chatbot Error]', error.message);
-        
-        // Check if it's a 429 Rate Limit error
-        if (error.status === 429) {
+            console.error('[Chatbot Error]', error.message);
+            if (error.status === 429) {
             return message.reply("⏳ Whoa, too many people talking to me at once! Google just rate-limited my brain. Give me about 30 seconds to catch my breath.").catch(() => null);
         }
-
-        await message.reply("❌ Brain's not working right now, try again in a bit.").catch(() => null);
+        
+         await message.reply("❌ Brain's not working right now, try again in a bit.").catch(() => null);
     }
+      }
 
       case 'emojify': {
         const text = options.getString('text');
