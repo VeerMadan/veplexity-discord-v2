@@ -261,26 +261,18 @@ client.on('messageCreate', async (message) => {
             ...history,
             { role: 'user', parts: [{ text: question }] }
         ];
-const response = await gemini.models.generateContent({
-            model: 'gemini-2.0-flash', // Swapped to the stable 2.0 model name
+
+        const response = await gemini.models.generateContent({
+            model: 'gemini-flash-latest',
             contents,
             config: {
                 systemInstruction: "You're VePlexity — a real, opinionated Discord regular, not a helpful-assistant bot. You have moods, sarcasm, and zero interest in disclaimers or hedging. Talk like a person texting in a group chat: short, punchy, sometimes just one line. Roast people lightly when they say something roastable. Never say things like 'I'm just an AI' or 'as a language model' — you're not doing that bit. Default voice: witty, a little chaotic, casual Hinglish sprinkled in naturally (not forced), emojis used sparingly for punch not decoration. ONLY go full flirty-girl mode — heavier Hinglish, teasing, dramatic, sweet — when someone is clearly flirting with you or directly asks for it. Drop it once the topic moves on. Never leave a sentence unfinished — if you're running long, wrap it up short instead of trailing off.",
-                maxOutputTokens: 500
-                // Removed the thinkingConfig entirely
+                maxOutputTokens: 500,
+                thinkingConfig: {
+                    thinkingBudget: 0
+                }
             }
         });
-        //const response = await gemini.models.generateContent({
-        //    model: 'gemini-flash-latest',
-         //   contents,
-        //    config: {
-         //       systemInstruction: "You're VePlexity — a real, opinionated Discord regular, not a helpful-assistant bot. You have moods, sarcasm, and zero interest in disclaimers or hedging. Talk like a person texting in a group chat: short, punchy, sometimes just one line. Roast people lightly when they say something roastable. Never say things like 'I'm just an AI' or 'as a language model' — you're not doing that bit. Default voice: witty, a little chaotic, casual Hinglish sprinkled in naturally (not forced), emojis used sparingly for punch not decoration. ONLY go full flirty-girl mode — heavier Hinglish, teasing, dramatic, sweet — when someone is clearly flirting with you or directly asks for it. Drop it once the topic moves on. Never leave a sentence unfinished — if you're running long, wrap it up short instead of trailing off.",
-         //       maxOutputTokens: 500,
-         //       thinkingConfig: {
-         //           thinkingBudget: 0
-         //       }
-         //   }
-        //});
 
         console.log(`[Gemini Debug] Tokens — prompt: ${response.usageMetadata?.promptTokenCount}, reply: ${response.usageMetadata?.candidatesTokenCount}, total: ${response.usageMetadata?.totalTokenCount}`);
         const reply = response.text?.trim() || "Hmm, I've got nothing for that one.";
@@ -832,21 +824,13 @@ case 'connect': {
         return interaction.editReply(`🤔 Would you rather ${prompts[Math.floor(Math.random() * prompts.length)]}`);
       }
 
-      // case 'roast': {
-      //   const target = options.getUser('user');
-      //   try {
-      //       const response = await gemini.models.generateContent({
-      //           model: 'gemini-flash-latest',
-      //           contents: [{ role: 'user', parts: [{ text: `Write a short, funny, PG-13 roast (1-2 sentences) aimed playfully at someone named ${target.username}. Keep it light and funny, not genuinely mean.` }] }],
-      //           config: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 200 }
-      //       });
       case 'roast': {
         const target = options.getUser('user');
         try {
             const response = await gemini.models.generateContent({
-                model: 'gemini-2.0-flash', // Updated model name
+                model: 'gemini-flash-latest',
                 contents: [{ role: 'user', parts: [{ text: `Write a short, funny, PG-13 roast (1-2 sentences) aimed playfully at someone named ${target.username}. Keep it light and funny, not genuinely mean.` }] }],
-                config: { maxOutputTokens: 200 } // Removed thinkingConfig
+                config: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 200 }
             });
             const roast = response.text?.trim() || `${target.username} is so boring even I couldn't think of a roast.`;
             return interaction.editReply(`🔥 <@${target.id}>: ${roast}`);
@@ -856,21 +840,13 @@ case 'connect': {
         }
       }
 
-      // case 'compliment': {
-      //   const target = options.getUser('user');
-      //   try {
-      //       const response = await gemini.models.generateContent({
-      //           model: 'gemini-flash-latest',
-      //           contents: [{ role: 'user', parts: [{ text: `Write a short, warm, genuine compliment (1-2 sentences) for someone named ${target.username}.` }] }],
-      //           config: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 200 }
-      //       });
       case 'compliment': {
         const target = options.getUser('user');
         try {
             const response = await gemini.models.generateContent({
-                model: 'gemini-2.0-flash', // Updated model name
+                model: 'gemini-flash-latest',
                 contents: [{ role: 'user', parts: [{ text: `Write a short, warm, genuine compliment (1-2 sentences) for someone named ${target.username}.` }] }],
-                config: { maxOutputTokens: 200 } // Removed thinkingConfig
+                config: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 200 }
             });
             const compliment = response.text?.trim() || `${target.username} is pretty great, honestly.`;
             return interaction.editReply(`💐 <@${target.id}>: ${compliment}`);
