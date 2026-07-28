@@ -4,6 +4,7 @@ import path from 'path';
 import { Client, GatewayIntentBits, EmbedBuilder } from 'discord.js';
 import { LavalinkManager } from 'lavalink-client';
 import ffmpeg from 'ffmpeg-static';
+import { GoogleGenAI } from '@google/genai';
 
 // 🔧 CRITICAL FIXES
 process.env.FFMPEG_PATH = ffmpeg;
@@ -43,6 +44,7 @@ database.warns ??= {};
 database.modLogs ??= {};
 database.cases ??= {};
 database.caseCounter ??= 0;
+database.chatbotGuilds ??= [];
 
 function createCase(interaction, action, userId, reason) {
   database.caseCounter++;
@@ -124,8 +126,13 @@ async function sendModLog(interaction, embed) {
    BOT CLIENT & PLAYER
 ========================= */
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
+
+const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const chatbotEnabled = new Set(); // guilds with /chatbot on
+const channelMemory = new Map(); // channelId -> [{role, text}]
+const chatbotCooldown = new Map(); // userId -> timestamp
 //aise hi
 client.on('error', err => console.log(`[Discord Client Error] ${err.message}`));
 
@@ -187,9 +194,56 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 });
 
 
+database.chatbotGuilds.forEach(id => chatbotEnabled.add(id));
+
 client.once('clientReady', () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
     client.lavalink.init({ id: client.user.id, username: client.user.username });
+});
+
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (!message.guild) return;
+    if (!chatbotEnabled.has(message.guildId)) return;
+    if (!message.mentions.has(client.user)) return;
+
+    const now = Date.now();
+    const lastUsed = chatbotCooldown.get(message.author.id) || 0;
+    if (now - lastUsed < 5000) return; // 5s cooldown per user
+    chatbotCooldown.set(message.author.id, now);
+
+    const question = message.content.replace(/<@!?\d+>/g, '').trim();
+    if (!question) return;
+
+    await message.channel.sendTyping();
+
+    const history = channelMemory.get(message.channelId) || [];
+
+    try {
+        const contents = [
+            ...history,
+            { role: 'user', parts: [{ text: question }] }
+        ];
+
+        const response = await gemini.models.generateContent({
+            model: 'gemini-flash-latest',
+            contents,
+            config: {
+                systemInstruction: "You're VePlexity, a witty, friendly Discord bot. Keep replies short and conversational — a sentence or two unless the question genuinely needs more. You have a playful sense of humor and often use emojis. Avoid long explanations or lists. If you don't know the answer, admit it politely. and when asked, be like a flirty girl too, who speaks in highly casual, playful, and flirty manner. Use emojis liberally to convey tone and emotion. Keep your responses concise, fun, and engaging.",
+                maxOutputTokens: 300
+            }
+        });
+
+        const reply = response.text?.trim() || "Hmm, I've got nothing for that one.";
+        await message.reply(reply.slice(0, 2000));
+
+        history.push({ role: 'user', parts: [{ text: question }] });
+        history.push({ role: 'model', parts: [{ text: reply }] });
+        channelMemory.set(message.channelId, history.slice(-10)); // keep last 5 exchanges
+    } catch (error) {
+        console.error('[Chatbot Error]', error);
+        await message.reply("❌ Brain's not working right now, try again in a bit.").catch(() => null);
+    }
 });
 
 /* =========================
@@ -442,13 +496,13 @@ case 'summon': {
             'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3YXZqbHlrOTA4MHNnZGYzZjdhZDdjY2R6aGIwOWJqeHIwMjBvYzE3YSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/eQACuze30PkNiS1eb7/giphy.gif',
             'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMHIxd3VkYzRybmwwN2RoczJrYWlhc2o5ZGg5ejV6cXlyeHJ6cTBlZyZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/2Y9eQob7S7ighEhv3y/giphy.gif',
             'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMHIxd3VkYzRybmwwN2RoczJrYWlhc2o5ZGg5ejV6cXlyeHJ6cTBlZyZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/gr7ekRT0Jzmi6mdpPy/giphy.gif',
-            'https://media1.tenor.com/m/5dDtXSVG7W0AAAAd/obito-uchiha-obito.gif',
-            'https://media1.tenor.com/m/ig3fiIxZvOgAAAAd/invocation-naruto.gif',
-            'https://media1.tenor.com/m/_BOcFSneKjwAAAAd/tenten-summoning.gif',
-            'https://media1.tenor.com/m/H9Zf2hKDiIIAAAAd/orochimaru-reanimation-jutsu.gif',
-            'https://media1.tenor.com/m/C8LQRFD4uEcAAAAd/madara.gif',
-            'https://media1.tenor.com/m/u0nCblnoMz8AAAAd/madara.gif',
-            'https://media1.tenor.com/m/PNwNplsY5EsAAAAd/anime-edo-tensei.gif',
+            'https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXQyZDV5dG0wOG1laDk5YTN4bnJib2sxbXVjeThzZDJiZ3hsMGR0YiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/CQsw5HAiM1FceskMvD/giphy.gif',
+            'https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExeXVkcmNzazJhbXN6cTBwb2xvd2Q0dnBvcnBrZGY1end4amNyaTgwYSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/QVAVDnrqkXdFNdpmmx/giphy.gif',
+            'https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExMm0yaWxqMjc4NDZxdjlyM2o3dHdxcHdpNmswbTE4bzRzOHR4cGlkaiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/JPDfJaFOBYS4fpXTBy/giphy.gif',
+            'https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExdXF2bmVkdG9wbndmaGV2bHB5cnY3MHpobW01YmJiam53c3J2N3I3NSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Hwmr6uVRkJbVasJ7FD/giphy.gif',
+            'https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExMTQ3eml2ejd6MGZndWI2eDZrcG50azVseWNkdmNia2wyeHYybmp5MSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Thx9SopwPDbLCXZ7GQ/giphy.gif',
+            'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExNWdlOHM3aDdzYXNvZWVpemd0N2JjN2ZrNTBvYzhtbmJxMjc4eDV3ciZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Ly16a3AFbHJ0D3sAs0/giphy.gif',
+            'https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExeHJwenFhNTk3cWE4a2VsdHNuMXdsc3RlazZoaDRvMnFzZmFheXVzMyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/me9qgHChCBgIB4jTFl/giphy.gif',
         ];
         const gif = summonGifs[Math.floor(Math.random() * summonGifs.length)];
         console.log(`[Summon Debug] Picked gif: ${gif}`);
@@ -502,6 +556,19 @@ case 'connect': {
         }
         guild247.add(interaction.guildId);
         return interaction.editReply('☀️ 24/7 mode **enabled** — I\'ll stay connected.');
+      }
+
+      case 'chatbot': {
+        const setting = options.getString('mode');
+        if (setting === 'on') {
+            chatbotEnabled.add(interaction.guildId);
+            if (!database.chatbotGuilds.includes(interaction.guildId)) database.chatbotGuilds.push(interaction.guildId);
+        } else {
+            chatbotEnabled.delete(interaction.guildId);
+            database.chatbotGuilds = database.chatbotGuilds.filter(id => id !== interaction.guildId);
+        }
+        saveData(database);
+        return interaction.editReply(`🤖 Chatbot mode **${setting === 'on' ? 'enabled' : 'disabled'}**. ${setting === 'on' ? 'Mention me anywhere and I\'ll respond!' : ''}`);
       }
 
       case 'play': {

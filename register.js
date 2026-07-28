@@ -141,6 +141,22 @@ const commands = [
   { name: 'connect', description: 'Connect the bot to your voice channel' },
   { name: 'disconnect', description: 'Disconnect the bot from voice channel' },
   { name: '247', description: 'Toggle 24/7 mode (bot stays connected in VC)' },
+  {
+    name: 'chatbot',
+    description: 'Toggle AI chatbot mode — mention the bot to chat with it',
+    options: [
+      {
+        name: 'mode',
+        description: 'Turn on or off',
+        type: 3,
+        required: true,
+        choices: [
+          { name: 'on', value: 'on' },
+          { name: 'off', value: 'off' }
+        ]
+      }
+    ]
+  }
 ];
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
