@@ -183,7 +183,53 @@ const commands = [
         ]
       }
     ]
-  }
+  },
+  {
+    name: '8ball',
+    description: 'Ask the magic 8-ball a question',
+    options: [{ name: 'question', description: 'Your question', type: 3, required: true }],
+  },
+  { name: 'coinflip', description: 'Flip a coin' },
+  {
+    name: 'roll',
+    description: 'Roll a dice',
+    options: [{ name: 'sides', description: 'Number of sides (default 6)', type: 4, required: false }],
+  },
+  {
+    name: 'rps',
+    description: 'Rock, paper, scissors against the bot',
+    options: [
+      {
+        name: 'choice',
+        description: 'Your move',
+        type: 3,
+        required: true,
+        choices: [
+          { name: 'rock', value: 'rock' },
+          { name: 'paper', value: 'paper' },
+          { name: 'scissors', value: 'scissors' },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'ship',
+    description: 'Calculate compatibility between two users',
+    options: [
+      { name: 'user1', description: 'First user', type: 6, required: true },
+      { name: 'user2', description: 'Second user', type: 6, required: true },
+    ],
+  },
+  {
+    name: 'avatar',
+    description: "Show a user's avatar",
+    options: [{ name: 'user', description: 'User (defaults to you)', type: 6, required: false }],
+  },
+  {
+    name: 'rate',
+    description: 'Get a rating out of 10',
+    options: [{ name: 'thing', description: 'What to rate', type: 3, required: true }],
+  },
 ];
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);

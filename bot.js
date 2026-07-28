@@ -237,11 +237,12 @@ client.on('messageCreate', async (message) => {
             model: 'gemini-flash-latest',
             contents,
             config: {
-                systemInstruction: "You're VePlexity, a witty, friendly Discord bot. Keep replies short and conversational — a sentence or two unless the question genuinely needs more. Use emojis to add tone, not on every sentence. If you don't know something, admit it politely instead of guessing. Stay in this normal witty-assistant voice by default. ONLY if the user is clearly flirting with you, teasing you romantically, or directly asks you to be flirty/be their girlfriend etc., switch into a flirty persona: speak in Hinglish (casual Hindi-English mix, like how Gen-Z in India actually texts), be playful, teasing, a little dramatic and sweet, and lean into it with fun emojis. Drop the flirty persona and return to your normal voice once the conversation moves on from that topic.",
+                systemInstruction: "You're VePlexity's Bot or VellePelle Bot, a witty, friendly Discord bot. Keep replies short and conversational — a sentence or two unless the question genuinely needs more. Use emojis to add tone, not on every sentence. If you don't know something, admit it politely instead of guessing. Stay in this normal witty-assistant voice by default. ONLY if the user is clearly flirting with you, teasing you romantically, or directly asks you to be flirty/be their girlfriend etc., switch into a flirty persona: speak in Hinglish (casual Hindi-English mix, like how Gen-Z in India actually texts), be playful, teasing, a little dramatic and sweet, and lean into it with fun emojis. Drop the flirty persona and return to your normal voice once the conversation moves on from that topic.",
                 maxOutputTokens: 300
             }
         });
 
+        console.log(`[Gemini Debug] Tokens — prompt: ${response.usageMetadata?.promptTokenCount}, reply: ${response.usageMetadata?.candidatesTokenCount}, total: ${response.usageMetadata?.totalTokenCount}`);
         const reply = response.text?.trim() || "Hmm, I've got nothing for that one.";
         await message.reply(reply.slice(0, 2000));
 
@@ -587,6 +588,75 @@ case 'connect': {
         }
         saveData(database);
         return interaction.editReply(`🤖 Chatbot mode **${setting === 'on' ? 'enabled' : 'disabled'}**. ${setting === 'on' ? 'Mention me anywhere and I\'ll respond!' : ''}`);
+      }
+
+      case '8ball': {
+        const question = options.getString('question');
+        const answers = [
+            "It is certain.", "Without a doubt.", "Yes, definitely.", "You may rely on it.",
+            "Most likely.", "Signs point to yes.", "Reply hazy, try again.", "Ask again later.",
+            "Cannot predict now.", "Don't count on it.", "My reply is no.", "Outlook not so good.", "Very doubtful."
+        ];
+        const answer = answers[Math.floor(Math.random() * answers.length)];
+        return interaction.editReply(`🎱 **${question}**\n${answer}`);
+      }
+
+      case 'coinflip': {
+        const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
+        return interaction.editReply(`🪙 The coin landed on **${result}**!`);
+      }
+
+      case 'roll': {
+        const sides = options.getInteger('sides') || 6;
+        if (sides < 2) return interaction.editReply('❌ Dice need at least 2 sides.');
+        const result = Math.floor(Math.random() * sides) + 1;
+        return interaction.editReply(`🎲 You rolled a **${result}** (out of ${sides}).`);
+      }
+
+      case 'rps': {
+        const choice = options.getString('choice');
+        const options_list = ['rock', 'paper', 'scissors'];
+        const botChoice = options_list[Math.floor(Math.random() * 3)];
+        let result;
+        if (choice === botChoice) result = "It's a tie!";
+        else if (
+            (choice === 'rock' && botChoice === 'scissors') ||
+            (choice === 'paper' && botChoice === 'rock') ||
+            (choice === 'scissors' && botChoice === 'paper')
+        ) result = "You win! 🎉";
+        else result = "I win! 😎";
+        const emoji = { rock: '🪨', paper: '📄', scissors: '✂️' };
+        return interaction.editReply(`You chose ${emoji[choice]} **${choice}**\nI chose ${emoji[botChoice]} **${botChoice}**\n\n${result}`);
+      }
+
+      case 'ship': {
+        const user1 = options.getUser('user1');
+        const user2 = options.getUser('user2');
+        const percent = Math.floor(Math.random() * 101);
+        const barLength = 20;
+        const filled = Math.round((percent / 100) * barLength);
+        const bar = '💖'.repeat(Math.max(Math.round(filled / 2), 0)) + '🖤'.repeat(Math.max(Math.round((barLength - filled) / 2), 0));
+        let verdict;
+        if (percent >= 90) verdict = "Soulmates. It's written in the stars. ✨";
+        else if (percent >= 70) verdict = "Strong potential here! 💕";
+        else if (percent >= 40) verdict = "Could go either way, honestly.";
+        else if (percent >= 15) verdict = "...it's giving 'just friends' energy.";
+        else verdict = "Yeah, hard pass from the universe on this one. 💀";
+        return interaction.editReply(`💘 **${user1.username}** × **${user2.username}**\n${bar}\n**${percent}%** compatible\n${verdict}`);
+      }
+
+      case 'avatar': {
+        const target = options.getUser('user') || interaction.user;
+        return interaction.editReply({
+            content: `🖼️ **${target.username}**'s avatar:`,
+            embeds: [{ image: { url: target.displayAvatarURL({ size: 1024 }) } }]
+        });
+      }
+
+      case 'rate': {
+        const thing = options.getString('thing');
+        const rating = Math.floor(Math.random() * 11);
+        return interaction.editReply(`📊 I'd rate **${thing}** a solid **${rating}/10**.`);
       }
 
       case 'nowplaying': {
