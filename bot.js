@@ -1239,7 +1239,7 @@ case 'connect': {
           if (!res || !res.tracks?.length) {
               return interaction.editReply(`❌ No results found for "${query}"`);
           }
-
+//just a backup
           const track = res.tracks[0];
           await lavaPlayer.queue.add(track);
           if (!lavaPlayer.playing) await lavaPlayer.play();
