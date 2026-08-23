@@ -34,7 +34,16 @@ class GuildQueue {
   }
 
   setupListeners() {
+    this.player.on(AudioPlayerStatus.Playing, () => {
+      console.log(`[MusicQueue ${this.guildId}] 🔊 Audio player is now PLAYING audio packets to Discord voice!`);
+    });
+
+    this.player.on(AudioPlayerStatus.Buffering, () => {
+      console.log(`[MusicQueue ${this.guildId}] ⏳ Audio player is BUFFERING...`);
+    });
+
     this.player.on(AudioPlayerStatus.Idle, () => {
+      console.log(`[MusicQueue ${this.guildId}] ⏹️ Audio player IDLE`);
       this.isPlaying = false;
       this.cleanUpCurrentResource();
 
@@ -69,10 +78,18 @@ class GuildQueue {
   }
 
   async connect() {
-    if (this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+    if (this.connection && this.connection.state.status === VoiceConnectionStatus.Ready) {
       return this.connection;
     }
 
+    if (this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+      try {
+        await entersState(this.connection, VoiceConnectionStatus.Ready, 15000);
+        return this.connection;
+      } catch (e) {}
+    }
+
+    console.log(`[MusicQueue ${this.guildId}] 🔌 Joining voice channel ${this.voiceChannel.id}...`);
     this.connection = joinVoiceChannel({
       channelId: this.voiceChannel.id,
       guildId: this.guildId,
@@ -80,6 +97,15 @@ class GuildQueue {
       selfDeaf: true,
       selfMute: false
     });
+
+    try {
+      await entersState(this.connection, VoiceConnectionStatus.Ready, 20000);
+      console.log(`[MusicQueue ${this.guildId}] ✅ Voice connection READY. Subscribing audio player...`);
+      this.connection.subscribe(this.player);
+    } catch (error) {
+      console.error(`[MusicQueue ${this.guildId}] Voice connection failed to become ready:`, error);
+      throw error;
+    }
 
     this.connection.on(VoiceConnectionStatus.Disconnected, async () => {
       try {
@@ -94,7 +120,6 @@ class GuildQueue {
       }
     });
 
-    this.connection.subscribe(this.player);
     return this.connection;
   }
 
@@ -111,6 +136,8 @@ class GuildQueue {
     this.current = nextTrack;
 
     try {
+      await this.connect();
+      console.log(`[MusicQueue ${this.guildId}] ▶️ Preparing to stream: ${nextTrack.title} by ${nextTrack.author}`);
       const streamUrl = await streamResolver.getDirectStreamUrl(nextTrack);
       if (!streamUrl) {
         this.textChannel?.send(`❌ Could not stream **${nextTrack.title}**, skipping...`).catch(() => null);
@@ -119,6 +146,7 @@ class GuildQueue {
 
       this.currentResource = await streamResolver.createAudioResource(streamUrl, this.volume);
       this.player.play(this.currentResource);
+      console.log(`[MusicQueue ${this.guildId}] 🚀 player.play() dispatched for: ${nextTrack.title}`);
       this.isPlaying = true;
       this.isPaused = false;
       this.startedAt = Date.now();
