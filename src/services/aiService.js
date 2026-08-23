@@ -22,37 +22,44 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY?.replace(/['"]/g, '').
 export async function generateAiReply({ prompt, systemPrompt = DEFAULT_SYSTEM_PROMPT, history = [], maxTokens = 300 }) {
   // ── 1. Try Groq (Ultra-fast & 14,400 free reqs/day) ──────────────
   if (GROQ_API_KEY) {
-    try {
-      const messages = [
-        { role: 'system', content: systemPrompt },
-        ...history.map(h => ({
-          role: h.role === 'model' ? 'assistant' : 'user',
-          content: h.parts?.[0]?.text || h.content || ''
-        })),
-        { role: 'user', content: prompt }
-      ];
+    const groqModels = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.6-27b'];
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.map(h => ({
+        role: h.role === 'model' ? 'assistant' : 'user',
+        content: h.parts?.[0]?.text || h.content || ''
+      })),
+      { role: 'user', content: prompt }
+    ];
 
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages,
-          max_tokens: maxTokens,
-          temperature: 0.85
-        })
-      });
+    for (const model of groqModels) {
+      try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${GROQ_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            max_tokens: maxTokens,
+            temperature: 0.85
+          })
+        });
 
-      if (res.ok) {
-        const data = await res.json();
-        const reply = data.choices?.[0]?.message?.content?.trim();
-        if (reply) return reply;
+        if (res.ok) {
+          const data = await res.json();
+          let reply = data.choices?.[0]?.message?.content?.trim();
+          if (reply) {
+            // Strip any <think> reasoning blocks if model outputs them
+            reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            if (reply) return reply;
+          }
+        }
+      } catch (e) {
+        console.warn(`[AI Service] Groq (${model}) error, trying next:`, e.message);
       }
-    } catch (e) {
-      console.warn('[AI Service] Groq error, falling back:', e.message);
     }
   }
 
