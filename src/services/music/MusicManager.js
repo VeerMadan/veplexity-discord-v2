@@ -77,16 +77,9 @@ class GuildQueue {
     this.currentResource = null;
   }
 
-  async connect() {
-    if (this.connection && this.connection.state.status === VoiceConnectionStatus.Ready) {
-      return this.connection;
-    }
-
+  connect() {
     if (this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-      try {
-        await entersState(this.connection, VoiceConnectionStatus.Ready, 15000);
-        return this.connection;
-      } catch (e) {}
+      return this.connection;
     }
 
     console.log(`[MusicQueue ${this.guildId}] 🔌 Joining voice channel ${this.voiceChannel.id}...`);
@@ -98,14 +91,11 @@ class GuildQueue {
       selfMute: false
     });
 
-    try {
-      await entersState(this.connection, VoiceConnectionStatus.Ready, 20000);
-      console.log(`[MusicQueue ${this.guildId}] ✅ Voice connection READY. Subscribing audio player...`);
-      this.connection.subscribe(this.player);
-    } catch (error) {
-      console.error(`[MusicQueue ${this.guildId}] Voice connection failed to become ready:`, error);
-      throw error;
-    }
+    this.connection.subscribe(this.player);
+
+    this.connection.on(VoiceConnectionStatus.Ready, () => {
+      console.log(`[MusicQueue ${this.guildId}] ✅ Voice connection is READY!`);
+    });
 
     this.connection.on(VoiceConnectionStatus.Disconnected, async () => {
       try {
@@ -136,7 +126,7 @@ class GuildQueue {
     this.current = nextTrack;
 
     try {
-      await this.connect();
+      this.connect();
       console.log(`[MusicQueue ${this.guildId}] ▶️ Preparing to stream: ${nextTrack.title} by ${nextTrack.author}`);
       const streamUrl = await streamResolver.getDirectStreamUrl(nextTrack);
       if (!streamUrl) {
@@ -291,7 +281,7 @@ class MusicManager {
     }
 
     const queue = this.getOrCreateQueue(interaction.guildId, voiceChannel, interaction.channel);
-    await queue.connect();
+    queue.connect();
 
     const tracks = await streamResolver.resolveTracks(query, interaction.user);
     if (!tracks || tracks.length === 0) {
