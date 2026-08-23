@@ -97,7 +97,7 @@ class StreamResolverService {
           return [{
             title,
             author: artist,
-            searchQuery: `${title} ${artist} audio`,
+            searchQuery: `${title} ${artist}`,
             url: null,
             sourceUrl: trimmed,
             durationSec,
@@ -116,7 +116,7 @@ class StreamResolverService {
             return {
               title,
               author: artist,
-              searchQuery: `${title} ${artist} audio`,
+              searchQuery: `${title} ${artist}`,
               url: null,
               sourceUrl: trimmed,
               durationSec,
@@ -139,6 +139,7 @@ class StreamResolverService {
           return playlist.videos.map(v => ({
             title: v.title || 'Unknown Title',
             author: v.channel?.name || 'Unknown Artist',
+            searchQuery: `${v.title} ${v.channel?.name || ''}`.trim(),
             url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
             sourceUrl: v.url || `https://www.youtube.com/watch?v=${v.id}`,
             durationSec: Math.round((v.duration || 0) / 1000),
@@ -160,6 +161,7 @@ class StreamResolverService {
           return [{
             title: video.title || 'Unknown Title',
             author: video.channel?.name || 'Unknown Artist',
+            searchQuery: `${video.title} ${video.channel?.name || ''}`.trim(),
             url: video.url || trimmed,
             sourceUrl: video.url || trimmed,
             durationSec: Math.round((video.duration || 0) / 1000),
@@ -173,6 +175,7 @@ class StreamResolverService {
         return [{
           title: 'YouTube Track',
           author: 'Unknown Artist',
+          searchQuery: trimmed,
           url: trimmed,
           sourceUrl: trimmed,
           durationSec: 0,
@@ -190,6 +193,7 @@ class StreamResolverService {
       return [{
         title: top.title,
         author: top.author,
+        searchQuery: `${top.title} ${top.author}`.trim(),
         url: top.url,
         sourceUrl: top.url,
         durationSec: top.durationSec,
@@ -203,63 +207,25 @@ class StreamResolverService {
   }
 
   async getDirectStreamUrl(track) {
+    if (track.searchQuery) return track.searchQuery;
+    if (track.title) return `${track.title} ${track.author || ''}`.trim();
     if (track.url) return track.url;
-    if (track.searchQuery) {
-      const results = await this.searchYouTube(track.searchQuery, 1);
-      if (results.length > 0) {
-        track.url = results[0].url;
-        track.thumbnail ??= results[0].thumbnail;
-        if (!track.durationSec && results[0].durationSec) {
-          track.durationSec = results[0].durationSec;
-          track.duration = results[0].duration;
-        }
-        return track.url;
-      }
-    }
     return null;
   }
 
-  async createAudioResource(streamUrl, volume = 1.0) {
+  async createAudioResource(queryOrUrl, volume = 1.0) {
     if (!this.ytDlp) {
       this.ytDlp = new YTDlp(BINARY_PATH);
     }
 
-    const baseFlags = [
-      '-f', 'ba/b',
-      '--no-warnings',
-      '--js-runtimes', 'node',
-      '--extractor-args', 'youtube:player_client=android_music,android,tv_embedded'
-    ];
+    const clean = String(queryOrUrl).trim();
+    const sourceTarget = clean.startsWith('http') ? clean : `scsearch1:${clean}`;
 
-    if (fs.existsSync(COOKIES_PATH)) {
-      baseFlags.push('--cookies', COOKIES_PATH);
-    }
-
-    try {
-      // 1. Extract direct googlevideo CDN stream URL using Android Music / TV Embedded clients
-      const raw = await this.ytDlp.execPromise([
-        streamUrl,
-        '--get-url',
-        ...baseFlags
-      ]);
-      const directUrl = raw.trim().split('\n')[0];
-      if (directUrl && directUrl.startsWith('http')) {
-        const resource = createAudioResource(directUrl, {
-          inputType: StreamType.Arbitrary,
-          inlineVolume: true
-        });
-        resource.volume?.setVolume(volume);
-        return resource;
-      }
-    } catch (e) {
-      console.log('[StreamResolver] Direct CDN URL extraction note:', e.message);
-    }
-
-    // 2. Fallback to child process execStream
     const flags = [
-      streamUrl,
+      sourceTarget,
+      '-f', 'ba/b',
       '-o', '-',
-      ...baseFlags
+      '--no-warnings'
     ];
 
     const stream = this.ytDlp.execStream(flags);
