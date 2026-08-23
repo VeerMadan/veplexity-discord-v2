@@ -221,6 +221,28 @@ class StreamResolverService {
     const clean = String(queryOrUrl).trim();
     const sourceTarget = clean.startsWith('http') ? clean : `scsearch1:${clean}`;
 
+    try {
+      // 1. Extract direct CDN audio stream URL
+      const raw = await this.ytDlp.execPromise([
+        sourceTarget,
+        '-f', 'ba/b',
+        '--get-url',
+        '--no-warnings'
+      ]);
+      const directUrl = raw.trim().split('\n')[0];
+      if (directUrl && directUrl.startsWith('http')) {
+        const resource = createAudioResource(directUrl, {
+          inputType: StreamType.Arbitrary,
+          inlineVolume: true
+        });
+        resource.volume?.setVolume(volume);
+        return resource;
+      }
+    } catch (e) {
+      console.log('[StreamResolver] Direct CDN URL extraction note:', e.message);
+    }
+
+    // 2. Fallback to child process execStream
     const flags = [
       sourceTarget,
       '-f', 'ba/b',
