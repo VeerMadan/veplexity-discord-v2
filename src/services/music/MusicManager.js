@@ -1,6 +1,7 @@
 import {
   joinVoiceChannel,
   createAudioPlayer,
+  NoSubscriberBehavior,
   AudioPlayerStatus,
   VoiceConnectionStatus,
   entersState,
@@ -28,7 +29,12 @@ class GuildQueue {
     this.totalPausedDuration = 0;
     this.idleTimer = null;
 
-    this.player = createAudioPlayer();
+    this.player = createAudioPlayer({
+      behaviors: {
+        noSubscriber: NoSubscriberBehavior.Play,
+        maxMissedFrames: 50
+      }
+    });
     this.connection = null;
     this.setupListeners();
   }
@@ -104,6 +110,10 @@ class GuildQueue {
 
     this.connection.on(VoiceConnectionStatus.Ready, () => {
       console.log(`[MusicQueue ${this.guildId}] ✅ Voice connection is READY!`);
+      this.connection.subscribe(this.player);
+      if (this.player.state.status === AudioPlayerStatus.AutoPaused) {
+        this.player.unpause();
+      }
     });
 
     this.connection.on(VoiceConnectionStatus.Disconnected, async () => {
