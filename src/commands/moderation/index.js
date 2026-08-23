@@ -853,3 +853,226 @@ export const unmuteall = {
     await sendModLog(interaction.guild, embed);
   }
 };
+
+export const role = {
+  name: 'role',
+  description: 'Add or remove a role from a server member',
+  options: [
+    { name: 'user', description: 'Target member', type: 6, required: true },
+    { name: 'role', description: 'Target role', type: 8, required: true },
+    {
+      name: 'action',
+      description: 'Action to perform',
+      type: 3,
+      required: true,
+      choices: [
+        { name: 'Add Role ➕', value: 'add' },
+        { name: 'Remove Role ➖', value: 'remove' }
+      ]
+    }
+  ],
+  async execute(interaction) {
+    const user = interaction.options.getUser('user');
+    const targetRole = interaction.options.getRole('role');
+    const action = interaction.options.getString('action');
+
+    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+    if (!member) return interaction.editReply('❌ Member not found in this server.');
+
+    const botMember = interaction.guild.members.me;
+    if (targetRole.position >= botMember.roles.highest.position) {
+      return interaction.editReply('❌ I cannot manage this role because it is higher than or equal to my highest role.');
+    }
+
+    const isAdd = action === 'add';
+    if (isAdd) {
+      if (member.roles.cache.has(targetRole.id)) {
+        return interaction.editReply(`❌ <@${user.id}> already has the <@&${targetRole.id}> role.`);
+      }
+      await member.roles.add(targetRole.id, `Role added by ${interaction.user.tag}`);
+    } else {
+      if (!member.roles.cache.has(targetRole.id)) {
+        return interaction.editReply(`❌ <@${user.id}> does not have the <@&${targetRole.id}> role.`);
+      }
+      await member.roles.remove(targetRole.id, `Role removed by ${interaction.user.tag}`);
+    }
+
+    const caseId = db.createCase({
+      action: isAdd ? 'role_add' : 'role_remove',
+      userId: user.id,
+      moderatorId: interaction.user.id,
+      reason: `${isAdd ? 'Added' : 'Removed'} role @${targetRole.name}`,
+      channelId: interaction.channelId,
+      guildId: interaction.guildId
+    });
+
+    const embed = buildEmbed(
+      isAdd ? 'Role Added' : 'Role Removed',
+      isAdd ? '➕' : '➖',
+      isAdd ? 0x2ecc71 : 0xe74c3c,
+      [
+        { name: 'Member', value: `<@${user.id}>`, inline: true },
+        { name: 'Role', value: `<@&${targetRole.id}>`, inline: true },
+        { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+        { name: 'Case', value: `#${caseId}`, inline: true }
+      ]
+    );
+
+    await interaction.editReply({ embeds: [embed] });
+    await sendModLog(interaction.guild, embed);
+  }
+};
+
+export const moveall = {
+  name: 'moveall',
+  description: 'Move all connected members from one voice channel to another',
+  options: [
+    { name: 'from', description: 'Source voice channel', type: 7, channel_types: [2], required: true },
+    { name: 'to', description: 'Destination voice channel', type: 7, channel_types: [2], required: true }
+  ],
+  async execute(interaction) {
+    const fromChannel = interaction.options.getChannel('from');
+    const toChannel = interaction.options.getChannel('to');
+
+    if (fromChannel.id === toChannel.id) {
+      return interaction.editReply('❌ Source and destination voice channels cannot be the same.');
+    }
+
+    const members = fromChannel.members;
+    if (!members || members.size === 0) {
+      return interaction.editReply(`❌ No members found in <#${fromChannel.id}> to move.`);
+    }
+
+    let movedCount = 0;
+    for (const [, member] of members) {
+      try {
+        await member.voice.setChannel(toChannel.id);
+        movedCount++;
+      } catch (e) {}
+    }
+
+    const caseId = db.createCase({
+      action: 'moveall',
+      userId: fromChannel.id,
+      moderatorId: interaction.user.id,
+      reason: `Moved ${movedCount} members from ${fromChannel.name} to ${toChannel.name}`,
+      channelId: interaction.channelId,
+      guildId: interaction.guildId
+    });
+
+    const embed = buildEmbed('Mass Voice Move', '🚚', 0x3498db, [
+      { name: 'From Channel', value: `<#${fromChannel.id}>`, inline: true },
+      { name: 'To Channel', value: `<#${toChannel.id}>`, inline: true },
+      { name: 'Members Moved', value: `${movedCount}`, inline: true },
+      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+      { name: 'Case', value: `#${caseId}`, inline: true }
+    ]);
+
+    await interaction.editReply({ embeds: [embed] });
+    await sendModLog(interaction.guild, embed);
+  }
+};
+
+export const nuke = {
+  name: 'nuke',
+  description: 'Completely wipe and clone the current channel for a fresh start',
+  options: [
+    { name: 'reason', description: 'Reason for nuking the channel', type: 3, required: false }
+  ],
+  async execute(interaction) {
+    const channel = interaction.channel;
+    const reason = interaction.options.getString('reason') || 'Channel purge / fresh start';
+
+    const cloned = await channel.clone({
+      reason: `Nuked by ${interaction.user.tag}: ${reason}`
+    });
+
+    await channel.delete(`Nuked by ${interaction.user.tag}`);
+
+    const caseId = db.createCase({
+      action: 'nuke',
+      userId: cloned.id,
+      moderatorId: interaction.user.id,
+      reason,
+      channelId: cloned.id,
+      guildId: interaction.guildId
+    });
+
+    const embed = buildEmbed('Channel Nuked', '💥', 0xe74c3c, [
+      { name: 'Channel', value: `<#${cloned.id}>`, inline: true },
+      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+      { name: 'Reason', value: reason, inline: false },
+      { name: 'Case', value: `#${caseId}`, inline: true }
+    ]);
+
+    embed.setImage('https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdWlyMmRveXJ2b3hpd2s4NGZ1bzNqazYyMDNvdHFwMHNocmtobnRhYiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/oe33xf3B50fsc/giphy.gif');
+
+    await cloned.send({ embeds: [embed] });
+    await sendModLog(interaction.guild, embed);
+  }
+};
+
+export const announce = {
+  name: 'announce',
+  description: 'Send a professional announcement embed to a channel',
+  options: [
+    { name: 'channel', description: 'Target announcement channel', type: 7, channel_types: [0], required: true },
+    { name: 'title', description: 'Announcement title', type: 3, required: true },
+    { name: 'message', description: 'Announcement body text (supports markdown)', type: 3, required: true },
+    {
+      name: 'color',
+      description: 'Color theme of the announcement',
+      type: 3,
+      required: false,
+      choices: [
+        { name: 'Blue 🔵', value: 'blue' },
+        { name: 'Gold ⭐', value: 'gold' },
+        { name: 'Green 🟢', value: 'green' },
+        { name: 'Red 🔴', value: 'red' },
+        { name: 'Purple 🟣', value: 'purple' }
+      ]
+    },
+    {
+      name: 'ping',
+      description: 'Role mention',
+      type: 3,
+      required: false,
+      choices: [
+        { name: '@everyone', value: 'everyone' },
+        { name: '@here', value: 'here' },
+        { name: 'None', value: 'none' }
+      ]
+    }
+  ],
+  async execute(interaction) {
+    const channel = interaction.options.getChannel('channel');
+    const title = interaction.options.getString('title');
+    const message = interaction.options.getString('message');
+    const colorChoice = interaction.options.getString('color') || 'gold';
+    const pingChoice = interaction.options.getString('ping') || 'none';
+
+    const colors = {
+      blue: 0x3498db,
+      gold: 0xf1c40f,
+      green: 0x2ecc71,
+      red: 0xe74c3c,
+      purple: 0x9b59b6
+    };
+
+    const embed = new (await import('discord.js')).EmbedBuilder()
+      .setColor(colors[colorChoice] || 0xf1c40f)
+      .setTitle(`📢 ${title}`)
+      .setDescription(message)
+      .setFooter({ text: `Announced by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() })
+      .setTimestamp();
+
+    let content = '';
+    if (pingChoice === 'everyone') content = '@everyone';
+    else if (pingChoice === 'here') content = '@here';
+
+    await channel.send({ content: content || undefined, embeds: [embed] });
+
+    return interaction.editReply(`✅ Announcement successfully sent to <#${channel.id}>!`);
+  }
+};
+

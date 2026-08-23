@@ -7,7 +7,8 @@ export const MODERATION_COMMAND_NAMES = [
   'warn', 'pvc_warn', 'kick', 'ban', 'unban', 'timeout', 'purge',
   'lock', 'unlock', 'slowmode', 'pvc_ban', 'pvc_restore', 'warnings',
   'clearwarnings', 'cases', 'case', 'modlogs', 'note', 'notes',
-  'nickname', 'lockdown', 'unlockdown', 'masskick', 'massban', 'muteall', 'unmuteall'
+  'nickname', 'lockdown', 'unlockdown', 'masskick', 'massban', 'muteall', 'unmuteall',
+  'role', 'moveall', 'nuke', 'announce'
 ];
 
 export const allCommandsList = [

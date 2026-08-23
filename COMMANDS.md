@@ -1,11 +1,11 @@
 # 📜 VePlexity Discord Bot - Complete Commands Directory
 
-All 70 slash commands available on VePlexity, categorized by feature type.
+All 94 slash commands available on VePlexity, categorized by feature type.
 
 ---
 
-## 🎵 1. Music Playback Commands
-High quality YouTube & Spotify streaming (No SoundCloud). Supports 24/7 VC mode.
+## 🎵 1. Music Playback Commands (13 Commands)
+High quality YouTube & Spotify streaming. Supports 24/7 VC mode.
 
 | Command | Arguments | Description |
 | :--- | :--- | :--- |
@@ -25,7 +25,7 @@ High quality YouTube & Spotify streaming (No SoundCloud). Supports 24/7 VC mode.
 
 ---
 
-## 🛡️ 2. Moderation & Server Administration
+## 🛡️ 2. Moderation & Server Administration (30 Commands)
 *Restricted to Staff Roles: Owner, Administrator, Senior Mod, Moderator, Trial Mod.*
 *All actions automatically log a case to the database and send rich embeds to the configured mod-log channel.*
 
@@ -41,6 +41,10 @@ High quality YouTube & Spotify streaming (No SoundCloud). Supports 24/7 VC mode.
 | `/lock` | *None* | Locks current channel for `@everyone`. |
 | `/unlock` | *None* | Unlocks current channel for `@everyone`. |
 | `/slowmode` | `<seconds>` | Sets rate limit per user in channel (0 to disable). |
+| `/role` | `<user> <role> <add \| remove>` | Adds or removes a server role from a member with hierarchy validation. |
+| `/moveall` | `<from> <to>` | Moves all connected members from one voice channel to another. |
+| `/nuke` | `[reason]` | Completely wipes and clones the current text channel for a clean reset. |
+| `/announce` | `<channel> <title> <message> [color] [ping]` | Sends a beautiful, rich announcement embed to a channel with optional ping. |
 | `/pvc_ban` | `<user> <rule>` | Revokes Private VC access role (`1469376368067477689`). |
 | `/pvc_restore` | `<user>` | Restores Private VC access role. |
 | `/warnings` | `<user>` | Displays total general warnings and PVC warnings for a user. |
@@ -60,62 +64,77 @@ High quality YouTube & Spotify streaming (No SoundCloud). Supports 24/7 VC mode.
 
 ---
 
-## 🎭 3. Roleplay & Action Commands
-*Mentions both users (`@User1 bit @User2!`) and sends a random high-quality anime GIF.*
+## 🎭 3. Action, Roleplay & Flirty Commands (16 Commands)
+*Sends high-quality anime GIF reaction embeds with playful messaging.*
 
 | Command | Arguments | Description |
 | :--- | :--- | :--- |
-| `/bite` | `<user>` | Bite someone with a fun anime GIF. |
-| `/hug` | `<user>` | Hug someone warmly. |
-| `/kiss` | `<user>` | Kiss someone sweet. |
 | `/pat` | `<user>` | Pat someone gently on the head. |
-| `/slap` | `<user>` | Slap someone dramatically. |
-| `/tickle` | `<user>` | Tickle someone. |
-| `/cuddle` | `<user>` | Cuddle up with someone. |
+| `/hug` | `<user>` | Give someone a warm, comforting hug. |
+| `/kiss` | `<user>` | Kiss someone sweetly. |
+| `/slap` | `<user>` | Slap someone across the face. |
+| `/bite` | `<user>` | Playfully bite someone. |
+| `/tickle` | `<user>` | Tickle someone until they laugh. |
+| `/cuddle` | `<user>` | Cuddle up close with someone. |
 | `/poke` | `<user>` | Poke someone to get their attention. |
+| `/bonk` | `<user>` | Bonk someone into horny jail with an anime mallet. |
+| `/punch` | `<user>` | Throw a full-power anime punch at someone. |
+| `/blush` | `<user>` | Blush shyly at someone special. |
+| `/wink` | `<user>` | Wink playfully and charismatically at someone. |
+| `/lick` | `<user>` | Playfully lick someone. |
+| `/cry` | *None* | Express your sorrow with a dramatic crying anime GIF. |
+| `/flirt` | `<user>` | Generate a smooth, AI-crafted flirty line for someone. |
+| `/pickup` | `[user]` | Drop a smooth or cheesy pickup line from our curated vault. |
 
 ---
 
-## 🎮 4. Interactive Games & Fun
-*Multiplayer games featuring Discord button components.*
+## 🎮 4. Fun, Social & Interactive Games (27 Commands)
 
 | Command | Arguments | Description |
 | :--- | :--- | :--- |
-| `/tictactoe` | `<opponent>` | Interactive 2-player Tic-Tac-Toe with Discord buttons. |
-| `/connect4` | `<opponent>` | Interactive 2-player Connect 4 with Discord buttons. |
-| `/rpsduel` | `<opponent>` | 2-player Rock Paper Scissors duel with secret button picks. |
-| `/rps` | `<rock \| paper \| scissors>` | Play Rock Paper Scissors against the bot. |
-| `/ship` | `<user1> <user2>` | Calculates love compatibility between two users with heart progress bar. |
-| `/8ball` | `<question>` | Ask the magic 8-ball any question. |
-| `/coinflip` | *None* | Flip a coin (Heads or Tails). |
-| `/roll` | `[sides]` | Roll a dice (default 6 sides). |
-| `/summon` | `<user>` | Dramatically summon someone from the shadow realm with anime GIF. |
+| `/truth` | *None* | Get a spicy or thought-provoking Truth challenge question. |
+| `/dare` | *None* | Get a hilarious, bold Dare challenge to complete in the server. |
+| `/joke` | *None* | Fresh, funny joke with spoiler punchline delivery. |
+| `/meme` | *None* | Fetches a fresh, trending meme directly from Reddit. |
+| `/quote` | *None* | Inspiring or philosophical quote from legendary thinkers. |
+| `/trivia` | *None* | Interactive 4-choice trivia challenge with button selection and timer. |
+| `/wyr` | *None* | Interactive "Would You Rather" prompt with live voting buttons (A vs B). |
+| `/howgay` | `[user]` | Measure someone's rainbow percentage on the Gay-O-Meter. |
+| `/simp` | `[user]` | Calculate someone's simp score on the Simp-O-Meter. |
+| `/vibe` | `[user]` | Run an energetic vibe check to determine current mood/aesthetic. |
+| `/ratio` | `<user>` | Attempt to brutally ratio another member in the server. |
+| `/iq` | `[user]` | Calculate someone's IQ score with funny assessment categories. |
+| `/affirmation` | *None* | Receive a boost of positive daily motivation and encouragement. |
+| `/8ball` | `<question>` | Consult the mystical Magic 8-Ball for cosmic guidance. |
+| `/coinflip` | *None* | Flip a golden coin with dramatic reveal (Heads/Tails). |
+| `/roll` | `[sides]` | Roll dice (customizable up to 1,000 sides). |
+| `/rps` | `<choice>` | Play Rock Paper Scissors against the bot. |
+| `/ship` | `<user1> <user2>` | Calculate love compatibility percentage with visual heart bar meter. |
+| `/tictactoe` | `<opponent>` | Play 2-player Tic-Tac-Toe on an interactive 3x3 button grid. |
+| `/connect4` | `<opponent>` | Play 2-player Connect 4 with emoji board rendering and drop buttons. |
+| `/rpsduel` | `<opponent>` | 2-player secret Rock Paper Scissors duel with button selections. |
+| `/summon` | `<user>` | Summon someone with dramatic ancient rituals and anime summoning GIFs. |
+| `/chatbot` | `<on \| off>` | Toggle Gemini AI Chatbot mode for `@mention` conversations in the server. |
+| `/roast` | `<user>` | Unleash a savage, AI-generated PG-13 roast on a member. |
+| `/compliment` | `<user>` | Generate a warm, AI-crafted compliment for a member. |
+| `/fact` | *None* | Get a mind-blowing trivia fact from live API + curated backup. |
+| `/emojify` | `<text>` | Convert plain text into bold regional indicator emojis. |
 
 ---
 
-## 🧠 5. AI & Social Commands
-*Powered by Google Gemini AI (`@google/genai`).*
+## ⚙️ 5. Utility & Server Information (8 Commands)
 
 | Command | Arguments | Description |
 | :--- | :--- | :--- |
-| `/chatbot` | `<on \| off>` | Toggles AI chatbot in the server (mention `@VePlexity` in any channel to chat). |
-| `/roast` | `<user>` | Generates a witty, playful AI roast of a user. |
-| `/compliment` | `<user>` | Generates a genuine, warm AI compliment for a user. |
-| `/fact` | *None* | Returns a mind-blowing random fact. |
-| `/wyr` | *None* | Returns a funny "Would You Rather" prompt. |
-| `/emojify` | `<text>` | Converts text into regional indicator emoji letters. |
+| `/test` | *None* | Bot status dashboard showing gateway ping, uptime, memory, and Node.js version. |
+| `/serverinfo` | *None* | Displays server statistics, boost count, channel totals, and owner. |
+| `/roleinfo` | `<role>` | Shows role color, permissions, member count, and creation date. |
+| `/userinfo` | `<user>` | Displays account age, server join date, avatar, and roles. |
+| `/avatar` | `[user]` | Shows a full-resolution 1024px avatar image embed for any user. |
+| `/rate` | `<thing>` | Rates anything on a 0–10 scale with a filled visual meter. |
+| `/poll` | `<question>` | Creates a formatted poll embed and auto-reacts with 👍 and 👎. |
+| `/remindme` | `<time> <text>` | Sets a timed reminder (e.g. `10m`, `1h`, `2d`) up to 7 days. |
 
 ---
 
-## ⚙️ 6. Utility & Server Information
-
-| Command | Arguments | Description |
-| :--- | :--- | :--- |
-| `/serverinfo` | *None* | Shows server stats, owner, boost level, channel counts, and creation date. |
-| `/roleinfo` | `<role>` | Shows role statistics, permissions, member count, and creation date. |
-| `/userinfo` | `<user>` | Displays account creation date, server join date, and roles for a user. |
-| `/avatar` | `[user]` | Displays full-resolution avatar image of a user or yourself. |
-| `/rate` | `<thing>` | Rates anything out of 10. |
-| `/poll` | `<question>` | Creates an interactive yes/no poll with 👍 and 👎 reactions. |
-| `/remindme` | `<time> <text>` | Sets a personal reminder (e.g. `10m`, `1h`, `2d`). |
-| `/test` | *None* | Verifies bot responsiveness and stability. |
+**Total Slash Commands:** 94 Commands
