@@ -69,6 +69,11 @@ class GuildQueue {
   }
 
   cleanUpCurrentResource() {
+    if (this.currentResource?._pcmStream) {
+      try {
+        this.currentResource._pcmStream.destroy();
+      } catch (e) {}
+    }
     if (this.currentResource?._ytStream) {
       try {
         this.currentResource._ytStream.destroy();
@@ -87,7 +92,7 @@ class GuildQueue {
       channelId: this.voiceChannel.id,
       guildId: this.guildId,
       adapterCreator: this.voiceChannel.guild.voiceAdapterCreator,
-      selfDeaf: true,
+      selfDeaf: false,
       selfMute: false
     });
 

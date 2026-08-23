@@ -2,9 +2,13 @@ import YTDlpWrap from 'yt-dlp-wrap';
 import { createAudioResource, StreamType } from '@discordjs/voice';
 import spotifyUrlInfo from 'spotify-url-info';
 import YouTube from 'youtube-sr';
+import prism from 'prism-media';
+import ffmpeg from 'ffmpeg-static';
 import fs from 'fs';
 import path from 'path';
 import { formatSeconds } from '../../utils/helpers.js';
+
+if (ffmpeg) process.env.FFMPEG_PATH = ffmpeg;
 
 const YTDlp = YTDlpWrap.default || YTDlpWrap;
 const ytSearcher = YouTube.default || YouTube;
@@ -12,7 +16,6 @@ const ytSearcher = YouTube.default || YouTube;
 const isWindows = process.platform === 'win32';
 const BINARY_NAME = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
 const BINARY_PATH = path.resolve(`./${BINARY_NAME}`);
-const COOKIES_PATH = path.resolve('./cookies.txt');
 
 const spotify = spotifyUrlInfo(fetch);
 
@@ -221,28 +224,6 @@ class StreamResolverService {
     const clean = String(queryOrUrl).trim();
     const sourceTarget = clean.startsWith('http') ? clean : `scsearch1:${clean}`;
 
-    try {
-      // 1. Extract direct CDN audio stream URL
-      const raw = await this.ytDlp.execPromise([
-        sourceTarget,
-        '-f', 'ba/b',
-        '--get-url',
-        '--no-warnings'
-      ]);
-      const directUrl = raw.trim().split('\n')[0];
-      if (directUrl && directUrl.startsWith('http')) {
-        const resource = createAudioResource(directUrl, {
-          inputType: StreamType.Arbitrary,
-          inlineVolume: true
-        });
-        resource.volume?.setVolume(volume);
-        return resource;
-      }
-    } catch (e) {
-      console.log('[StreamResolver] Direct CDN URL extraction note:', e.message);
-    }
-
-    // 2. Fallback to child process execStream
     const flags = [
       sourceTarget,
       '-f', 'ba/b',
@@ -250,15 +231,28 @@ class StreamResolverService {
       '--no-warnings'
     ];
 
-    const stream = this.ytDlp.execStream(flags);
+    const rawStream = this.ytDlp.execStream(flags);
 
-    const resource = createAudioResource(stream, {
-      inputType: StreamType.Arbitrary,
+    const transcoder = new prism.FFmpeg({
+      args: [
+        '-analyzeduration', '0',
+        '-loglevel', '0',
+        '-f', 's16le',
+        '-ar', '48000',
+        '-ac', '2',
+      ],
+    });
+
+    const pcmStream = rawStream.pipe(transcoder);
+
+    const resource = createAudioResource(pcmStream, {
+      inputType: StreamType.Raw,
       inlineVolume: true
     });
 
     resource.volume?.setVolume(volume);
-    resource._ytStream = stream;
+    resource._ytStream = rawStream;
+    resource._pcmStream = pcmStream;
 
     return resource;
   }
