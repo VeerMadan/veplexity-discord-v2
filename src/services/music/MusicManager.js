@@ -59,8 +59,12 @@ class GuildQueue {
       this.playNext();
     });
 
+    this.player.on('stateChange', (oldState, newState) => {
+      console.log(`[MusicQueue ${this.guildId}] 🔄 Player state: ${oldState.status} -> ${newState.status}`);
+    });
+
     this.player.on('error', error => {
-      console.error(`[MusicQueue ${this.guildId}] Player error:`, error.message);
+      console.error(`[MusicQueue ${this.guildId}] ❌ Player error:`, error.message);
       this.isPlaying = false;
       this.cleanUpCurrentResource();
       this.current = null;

@@ -234,6 +234,7 @@ class StreamResolverService {
     const rawStream = this.ytDlp.execStream(flags);
 
     const transcoder = new prism.FFmpeg({
+      command: ffmpeg || process.env.FFMPEG_PATH || 'ffmpeg',
       args: [
         '-analyzeduration', '0',
         '-loglevel', '0',
