@@ -256,12 +256,18 @@ class StreamResolverService {
   }
 
   createAudioResource(streamUrl, volume = 1.0) {
+    if (!this.ytDlp) {
+      this.ytDlp = new YTDlp(BINARY_PATH);
+    }
     const flags = [
       streamUrl,
-      '-f', 'ba/ba*',
+      '-f', 'ba/b',
       '-o', '-',
-      ...this.getBaseFlags()
+      '--no-warnings'
     ];
+    if (fs.existsSync(COOKIES_PATH)) {
+      flags.push('--cookies', COOKIES_PATH);
+    }
 
     const stream = this.ytDlp.execStream(flags);
 
