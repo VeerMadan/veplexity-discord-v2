@@ -236,11 +236,9 @@ class StreamResolverService {
     const transcoder = new prism.FFmpeg({
       command: ffmpeg || process.env.FFMPEG_PATH || 'ffmpeg',
       args: [
-        '-analyzeduration', '0',
-        '-loglevel', '0',
         '-f', 's16le',
         '-ar', '48000',
-        '-ac', '2',
+        '-ac', '2'
       ],
     });
 
