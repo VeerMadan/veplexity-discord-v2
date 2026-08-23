@@ -1,11 +1,14 @@
 import YTDlpWrap from 'yt-dlp-wrap';
 import { createAudioResource, StreamType } from '@discordjs/voice';
 import spotifyUrlInfo from 'spotify-url-info';
+import YouTube from 'youtube-sr';
 import fs from 'fs';
 import path from 'path';
 import { formatSeconds } from '../../utils/helpers.js';
 
 const YTDlp = YTDlpWrap.default || YTDlpWrap;
+const ytSearcher = YouTube.default || YouTube;
+
 const isWindows = process.platform === 'win32';
 const BINARY_NAME = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
 const BINARY_PATH = path.resolve(`./${BINARY_NAME}`);
@@ -50,7 +53,8 @@ class StreamResolverService {
   getBaseFlags() {
     const flags = [
       '--no-warnings',
-      '--js-runtimes', 'node'
+      '--js-runtimes', 'node',
+      '--extractor-args', 'youtube:player_client=android,ios,web'
     ];
     if (fs.existsSync(COOKIES_PATH)) {
       flags.push('--cookies', COOKIES_PATH);
@@ -59,32 +63,43 @@ class StreamResolverService {
   }
 
   async searchYouTube(query, limit = 10) {
-    await this.initPromise;
     try {
       const cleanQuery = query.replace(/["\n\r]/g, ' ').trim();
-      const flags = [
-        `ytsearch${limit}:${cleanQuery}`,
-        '--dump-single-json',
-        '--flat-playlist',
-        ...this.getBaseFlags()
-      ];
-
-      const raw = await this.ytDlp.execPromise(flags);
-      const data = JSON.parse(raw);
-      const entries = data.entries || [];
-
-      return entries.map(item => ({
-        id: item.id,
-        title: item.title || 'Unknown Title',
-        author: item.uploader || item.channel || 'Unknown Artist',
-        url: item.url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : null),
-        durationSec: item.duration || 0,
-        duration: formatSeconds(item.duration || 0),
-        thumbnail: item.thumbnails?.[0]?.url || null
-      })).filter(t => t.url);
+      const videos = await ytSearcher.search(cleanQuery, { limit, type: 'video' });
+      return videos.map(v => ({
+        id: v.id,
+        title: v.title || 'Unknown Title',
+        author: v.channel?.name || 'Unknown Artist',
+        url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
+        durationSec: Math.round((v.duration || 0) / 1000),
+        duration: v.durationFormatted || formatSeconds(Math.round((v.duration || 0) / 1000)),
+        thumbnail: v.thumbnail?.url || null
+      }));
     } catch (error) {
-      console.error('[StreamResolver] Search failed:', error.message);
-      return [];
+      console.error('[StreamResolver] youtube-sr search error, fallback to yt-dlp:', error.message);
+      try {
+        await this.initPromise;
+        const flags = [
+          `ytsearch${limit}:${query}`,
+          '--dump-single-json',
+          '--flat-playlist',
+          ...this.getBaseFlags()
+        ];
+        const raw = await this.ytDlp.execPromise(flags);
+        const data = JSON.parse(raw);
+        const entries = data.entries || [];
+        return entries.map(item => ({
+          id: item.id,
+          title: item.title || 'Unknown Title',
+          author: item.uploader || item.channel || 'Unknown Artist',
+          url: item.url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : null),
+          durationSec: item.duration || 0,
+          duration: formatSeconds(item.duration || 0),
+          thumbnail: item.thumbnails?.[0]?.url || null
+        })).filter(t => t.url);
+      } catch (e2) {
+        return [];
+      }
     }
   }
 
@@ -118,7 +133,7 @@ class StreamResolverService {
             title,
             author: artist,
             searchQuery: `${title} ${artist} audio`,
-            url: null, // to be resolved on play or immediately
+            url: null,
             sourceUrl: trimmed,
             durationSec,
             duration: formatSeconds(durationSec),

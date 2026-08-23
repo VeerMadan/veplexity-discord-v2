@@ -1,8 +1,5 @@
 node_modules
 .env
-cookies.txt
-cookie-string.txt
-convert-cookies.js
 yt-dlp
 yt-dlp.exe
 .vs

@@ -1,21 +1,34 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { GoogleGenAI } from '@google/genai';
-import { ACTION_VERBS, FALLBACK_ACTION_GIFS } from '../../config/constants.js';
+import { FALLBACK_ACTION_GIFS } from '../../config/constants.js';
 import { buildEmbed } from '../../utils/embeds.js';
 import db from '../../services/database.js';
 
 const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+const ACTION_PAST_VERBS = {
+  bite: 'bit',
+  hug: 'hugged',
+  kiss: 'kissed',
+  pat: 'patted',
+  slap: 'slapped',
+  tickle: 'tickled',
+  cuddle: 'cuddled',
+  poke: 'poked',
+  bonk: 'bonked',
+  punch: 'punched'
+};
+
 async function fetchActionGif(category) {
   try {
-    const res = await fetch(`https://nekos.best/api/v2/${category}`);
+    const res = await fetch(`https://api.otakugifs.xyz/gif?reaction=${category}`);
     if (res.ok) {
       const data = await res.json();
-      if (data.results?.[0]?.url) return data.results[0].url;
+      if (data.url) return data.url;
     }
   } catch (e) {}
 
-  // Fallback to otakugifs or our curated list
+  // Fallback to our curated working gif list
   const list = FALLBACK_ACTION_GIFS[category] || FALLBACK_ACTION_GIFS.summon;
   return list[Math.floor(Math.random() * list.length)];
 }
@@ -23,19 +36,19 @@ async function fetchActionGif(category) {
 async function handleAction(interaction, category) {
   const target = interaction.options.getUser('user');
   const gif = await fetchActionGif(category);
-  const verb = ACTION_VERBS[category] || `${category}s`;
+  const verb = ACTION_PAST_VERBS[category] || `${category}ed`;
   const isSelf = target.id === interaction.user.id;
 
-  const content = isSelf
-    ? `🤔 <@${interaction.user.id}> ${verb} themselves... wait, what? 😅`
-    : `✨ <@${interaction.user.id}> ${verb} <@${target.id}>!`;
+  const description = isSelf
+    ? `**<@${interaction.user.id}> ${verb} themselves... wait, what? 😳**`
+    : `**<@${interaction.user.id}> ${verb} <@${target.id}>!**`;
 
-  const embed = {
-    color: 0xff79c6,
-    image: { url: gif }
-  };
+  const embed = new EmbedBuilder()
+    .setColor(0xff2a6d)
+    .setDescription(description)
+    .setImage(gif);
 
-  return interaction.editReply({ content, embeds: [embed] });
+  return interaction.editReply({ embeds: [embed] });
 }
 
 // Action commands
@@ -70,9 +83,13 @@ export const summon = {
     ];
     const message = phrases[Math.floor(Math.random() * phrases.length)];
 
+    const embed = new EmbedBuilder()
+      .setColor(0x9b59b6)
+      .setDescription(`### ${message}`)
+      .setImage(gif);
+
     return interaction.editReply({
-      content: message,
-      embeds: [{ image: { url: gif } }]
+      embeds: [embed]
     });
   }
 };
