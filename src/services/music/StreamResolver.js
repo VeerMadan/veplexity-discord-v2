@@ -12,7 +12,6 @@ const ytSearcher = YouTube.default || YouTube;
 const isWindows = process.platform === 'win32';
 const BINARY_NAME = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
 const BINARY_PATH = path.resolve(`./${BINARY_NAME}`);
-const COOKIES_PATH = path.resolve('./cookies.txt');
 
 const spotify = spotifyUrlInfo(fetch);
 
@@ -50,18 +49,6 @@ class StreamResolverService {
     }
   }
 
-  getBaseFlags() {
-    const flags = [
-      '--no-warnings',
-      '--js-runtimes', 'node',
-      '--extractor-args', 'youtube:player_client=android,ios,web'
-    ];
-    if (fs.existsSync(COOKIES_PATH)) {
-      flags.push('--cookies', COOKIES_PATH);
-    }
-    return flags;
-  }
-
   async searchYouTube(query, limit = 10) {
     try {
       const cleanQuery = query.replace(/["\n\r]/g, ' ').trim();
@@ -74,32 +61,10 @@ class StreamResolverService {
         durationSec: Math.round((v.duration || 0) / 1000),
         duration: v.durationFormatted || formatSeconds(Math.round((v.duration || 0) / 1000)),
         thumbnail: v.thumbnail?.url || null
-      }));
+      })).filter(t => t.url);
     } catch (error) {
-      console.error('[StreamResolver] youtube-sr search error, fallback to yt-dlp:', error.message);
-      try {
-        await this.initPromise;
-        const flags = [
-          `ytsearch${limit}:${query}`,
-          '--dump-single-json',
-          '--flat-playlist',
-          ...this.getBaseFlags()
-        ];
-        const raw = await this.ytDlp.execPromise(flags);
-        const data = JSON.parse(raw);
-        const entries = data.entries || [];
-        return entries.map(item => ({
-          id: item.id,
-          title: item.title || 'Unknown Title',
-          author: item.uploader || item.channel || 'Unknown Artist',
-          url: item.url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : null),
-          durationSec: item.duration || 0,
-          duration: formatSeconds(item.duration || 0),
-          thumbnail: item.thumbnails?.[0]?.url || null
-        })).filter(t => t.url);
-      } catch (e2) {
-        return [];
-      }
+      console.error('[StreamResolver] Search error:', error.message);
+      return [];
     }
   }
 
@@ -117,7 +82,6 @@ class StreamResolverService {
 
   async resolveTracks(query, requestedBy) {
     await this.initPromise;
-
     const trimmed = query.trim();
 
     // 1️⃣ SPOTIFY URL
@@ -169,25 +133,19 @@ class StreamResolverService {
     // 2️⃣ YOUTUBE PLAYLIST
     if (this.isYouTubePlaylist(trimmed)) {
       try {
-        const flags = [
-          trimmed,
-          '--dump-single-json',
-          '--flat-playlist',
-          ...this.getBaseFlags()
-        ];
-        const raw = await this.ytDlp.execPromise(flags);
-        const data = JSON.parse(raw);
-        const entries = data.entries || [];
-        return entries.map(item => ({
-          title: item.title || 'Unknown Title',
-          author: item.uploader || item.channel || 'Unknown Artist',
-          url: item.url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : null),
-          sourceUrl: item.url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : null),
-          durationSec: item.duration || 0,
-          duration: formatSeconds(item.duration || 0),
-          thumbnail: item.thumbnails?.[0]?.url || null,
-          requestedBy
-        })).filter(t => t.url);
+        const playlist = await ytSearcher.getPlaylist(trimmed, { limit: 100 });
+        if (playlist && playlist.videos?.length > 0) {
+          return playlist.videos.map(v => ({
+            title: v.title || 'Unknown Title',
+            author: v.channel?.name || 'Unknown Artist',
+            url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
+            sourceUrl: v.url || `https://www.youtube.com/watch?v=${v.id}`,
+            durationSec: Math.round((v.duration || 0) / 1000),
+            duration: v.durationFormatted || formatSeconds(Math.round((v.duration || 0) / 1000)),
+            thumbnail: v.thumbnail?.url || null,
+            requestedBy
+          })).filter(t => t.url);
+        }
       } catch (e) {
         console.error('[StreamResolver] YouTube playlist error:', e);
       }
@@ -196,26 +154,32 @@ class StreamResolverService {
     // 3️⃣ YOUTUBE DIRECT VIDEO URL
     if (this.isYouTubeUrl(trimmed)) {
       try {
-        const flags = [
-          trimmed,
-          '--dump-single-json',
-          '--no-playlist',
-          ...this.getBaseFlags()
-        ];
-        const raw = await this.ytDlp.execPromise(flags);
-        const data = JSON.parse(raw);
-        return [{
-          title: data.title || 'Unknown Title',
-          author: data.uploader || data.channel || 'Unknown Artist',
-          url: data.webpage_url || trimmed,
-          sourceUrl: data.webpage_url || trimmed,
-          durationSec: data.duration || 0,
-          duration: formatSeconds(data.duration || 0),
-          thumbnail: data.thumbnail || null,
-          requestedBy
-        }];
+        const video = await ytSearcher.getVideo(trimmed);
+        if (video) {
+          return [{
+            title: video.title || 'Unknown Title',
+            author: video.channel?.name || 'Unknown Artist',
+            url: video.url || trimmed,
+            sourceUrl: video.url || trimmed,
+            durationSec: Math.round((video.duration || 0) / 1000),
+            duration: video.durationFormatted || formatSeconds(Math.round((video.duration || 0) / 1000)),
+            thumbnail: video.thumbnail?.url || null,
+            requestedBy
+          }];
+        }
       } catch (e) {
         console.error('[StreamResolver] YouTube video info error:', e);
+        // Fallback: use URL directly
+        return [{
+          title: 'YouTube Track',
+          author: 'Unknown Artist',
+          url: trimmed,
+          sourceUrl: trimmed,
+          durationSec: 0,
+          duration: '0:00',
+          thumbnail: null,
+          requestedBy
+        }];
       }
     }
 
@@ -259,15 +223,13 @@ class StreamResolverService {
     if (!this.ytDlp) {
       this.ytDlp = new YTDlp(BINARY_PATH);
     }
+
     const flags = [
       streamUrl,
       '-f', 'ba/b',
       '-o', '-',
       '--no-warnings'
     ];
-    if (fs.existsSync(COOKIES_PATH)) {
-      flags.push('--cookies', COOKIES_PATH);
-    }
 
     const stream = this.ytDlp.execStream(flags);
 
@@ -277,7 +239,7 @@ class StreamResolverService {
     });
 
     resource.volume?.setVolume(volume);
-    resource._ytStream = stream; // track stream reference to destroy on skip/stop
+    resource._ytStream = stream;
 
     return resource;
   }

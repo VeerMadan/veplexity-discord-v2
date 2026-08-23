@@ -161,7 +161,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 });
 
 // 🚀 READY EVENT
-client.once('ready', () => {
+client.once('clientReady', () => {
   console.log(`========================================`);
   console.log(`🤖 Logged in as: ${client.user.tag}`);
   console.log(`📡 Connected Guilds: ${client.guilds.cache.size}`);
