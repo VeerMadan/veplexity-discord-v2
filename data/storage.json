@@ -128,5 +128,8 @@
       "timestamp": "2026-04-16T17:02:32.673Z"
     }
   },
-  "caseCounter": 14
+  "caseCounter": 14,
+  "chatbotGuilds": [],
+  "pvcRevoked": [],
+  "notes": {}
 }
