@@ -35,9 +35,9 @@ const client = new Client({
 
 client.on('error', err => console.error(`[Discord Client Error] ${err.message}`));
 
-// 🧠 GEMINI CHATBOT SETUP
-const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const channelMemory = new Map(); // channelId -> [{role, parts}]
+// 🧠 MULTI-ENGINE AI CHATBOT SETUP (Groq / OpenRouter / Gemini with auto-fallback)
+import { generateAiReply } from './src/services/aiService.js';
+const channelMemory = new Map(); // channelId -> [{role, content}]
 const chatbotCooldown = new Map(); // userId -> timestamp
 
 client.on('messageCreate', async (message) => {
@@ -47,7 +47,7 @@ client.on('messageCreate', async (message) => {
 
   const now = Date.now();
   const lastUsed = chatbotCooldown.get(message.author.id) || 0;
-  if (now - lastUsed < 4000) return; // 4s cooldown
+  if (now - lastUsed < 3000) return; // 3s cooldown
   chatbotCooldown.set(message.author.id, now);
 
   const question = message.content.replace(/<@!?\d+>/g, '').trim();
@@ -58,35 +58,23 @@ client.on('messageCreate', async (message) => {
   const history = channelMemory.get(message.channelId) || [];
 
   try {
-    const contents = [
-      ...history,
-      { role: 'user', parts: [{ text: question }] }
-    ];
-
-    const response = await gemini.models.generateContent({
-      model: 'gemini-flash-latest',
-      contents,
-      config: {
-        systemInstruction: "You're VePlexity — a real, opinionated Discord regular, not a helpful-assistant bot. You have moods, sarcasm, and zero interest in disclaimers or hedging. Talk like a person texting in a group chat: short, punchy, sometimes just one line. Roast people lightly when they say something roastable. Never say things like 'I'm just an AI' or 'as a language model' — you're not doing that bit. Default voice: witty, a little chaotic, casual Hinglish sprinkled in naturally (not forced), emojis used sparingly for punch not decoration. ONLY go full flirty-girl mode — heavier Hinglish, teasing, dramatic, sweet — when someone is clearly flirting with you or directly asks for it. Drop it once the topic moves on. Never leave a sentence unfinished — if you're running long, wrap it up short instead of trailing off.",
-        maxOutputTokens: 500,
-        thinkingConfig: {
-          thinkingBudget: 0
-        }
-      }
+    const reply = await generateAiReply({
+      prompt: question,
+      history,
+      maxTokens: 400
     });
 
-    const reply = response.text?.trim() || "Hmm, I've got nothing for that one.";
     await message.reply(reply.slice(0, 2000));
 
-    history.push({ role: 'user', parts: [{ text: question }] });
-    history.push({ role: 'model', parts: [{ text: reply }] });
+    history.push({ role: 'user', content: question });
+    history.push({ role: 'model', content: reply });
     channelMemory.set(message.channelId, history.slice(-10));
   } catch (error) {
     console.error('[Chatbot Error]', error.message);
-    if (error.status === 429) {
-      return message.reply("⏳ Whoa, too many people talking to me at once! Google just rate-limited my brain. Give me a few seconds.").catch(() => null);
+    if (error.message === 'RATE_LIMITED') {
+      return message.reply("⏳ Whoa, high traffic right now! Taking a quick 5-second breather.").catch(() => null);
     }
-    await message.reply("❌ Brain's having a hiccup right now, try again in a sec.").catch(() => null);
+    await message.reply("Arey yaar, dimag thoda garam ho gaya tha! Ab bolo kya bol rahe the? 😌").catch(() => null);
   }
 });
 

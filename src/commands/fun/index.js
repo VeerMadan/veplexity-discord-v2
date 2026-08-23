@@ -1,5 +1,4 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { GoogleGenAI } from '@google/genai';
 import {
   FALLBACK_ACTION_GIFS,
   ACTION_VERBS,
@@ -12,8 +11,7 @@ import {
 } from '../../config/constants.js';
 import { buildEmbed } from '../../utils/embeds.js';
 import db from '../../services/database.js';
-
-const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { generateAiReply } from '../../services/aiService.js';
 
 const ACTION_PAST_VERBS = {
   bite: 'bit',
@@ -352,27 +350,11 @@ export const roast = {
   options: [{ name: 'user', description: 'The brave target to roast', type: 6, required: true }],
   async execute(interaction) {
     const target = interaction.options.getUser('user');
-    let roastText;
-    try {
-      const response = await gemini.models.generateContent({
-        model: 'gemini-flash-latest',
-        contents: [{ role: 'user', parts: [{ text: `Write a short, hilarious, savage yet PG-13 playful roast (1-2 sentences) aimed at someone named ${target.username}. Make it punchy and witty without being hateful.` }] }],
-        config: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 200 }
-      });
-      roastText = response.text?.trim() || `${target.username} is so unroastable even Gemini gave up.`;
-    } catch (e) {
-      roastText = `${target.username} got off lucky because the roast generator needed a quick cooldown!`;
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor(0xff6b35)
-      .setTitle('🔥 Emotional Damage Dealt')
-      .setDescription(`### <@${target.id}>:\n*"${roastText}"*`)
-      .setThumbnail(target.displayAvatarURL())
-      .setFooter({ text: `Roast ordered by ${interaction.user.username}` })
-      .setTimestamp();
-
-    return interaction.editReply({ embeds: [embed] });
+    const roastText = await generateAiReply({
+      prompt: `Write a short, hilarious, savage yet PG-13 playful roast (1-2 sentences) aimed at someone named ${target.username}. Make it punchy and witty without being hateful.`,
+      maxTokens: 200
+    });
+    return interaction.editReply(`🔥 <@${target.id}>: **${roastText}**`);
   }
 };
 
@@ -382,27 +364,11 @@ export const compliment = {
   options: [{ name: 'user', description: 'Who deserves some love and praise', type: 6, required: true }],
   async execute(interaction) {
     const target = interaction.options.getUser('user');
-    let complimentText;
-    try {
-      const response = await gemini.models.generateContent({
-        model: 'gemini-flash-latest',
-        contents: [{ role: 'user', parts: [{ text: `Write a warm, creative, genuinely uplifting compliment (1-2 sentences) for someone named ${target.username}. Make them smile!` }] }],
-        config: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 200 }
-      });
-      complimentText = response.text?.trim() || `${target.username} brings unmatched positive energy to this entire server!`;
-    } catch (e) {
-      complimentText = `${target.username} is genuinely one of the kindest and most wonderful people around!`;
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor(0xffb6c1)
-      .setTitle('💐 A Wholesome Compliment Has Arrived')
-      .setDescription(`### For <@${target.id}>:\n*"${complimentText}"*`)
-      .setThumbnail(target.displayAvatarURL())
-      .setFooter({ text: `Sent with love by ${interaction.user.username}` })
-      .setTimestamp();
-
-    return interaction.editReply({ embeds: [embed] });
+    const complimentText = await generateAiReply({
+      prompt: `Write a warm, creative, genuinely uplifting compliment (1-2 sentences) for someone named ${target.username}. Make them smile!`,
+      maxTokens: 200
+    });
+    return interaction.editReply(`💐 <@${target.id}>: **${complimentText}**`);
   }
 };
 
@@ -562,13 +528,7 @@ export const truth = {
   description: 'Get a spicy or thought-provoking Truth question',
   async execute(interaction) {
     const question = TRUTH_QUESTIONS[Math.floor(Math.random() * TRUTH_QUESTIONS.length)];
-    const embed = new EmbedBuilder()
-      .setColor(0x9b59b6)
-      .setTitle('🤫 Truth Challenge')
-      .setDescription(`### *"${question}"*\n\n> *You must answer honestly in chat!*`)
-      .setFooter({ text: `Requested by ${interaction.user.username}` })
-      .setTimestamp();
-    return interaction.editReply({ embeds: [embed] });
+    return interaction.editReply(`🤫 **Truth Challenge for <@${interaction.user.id}>:**\n> "${question}"`);
   }
 };
 
@@ -577,13 +537,7 @@ export const dare = {
   description: 'Get a bold, hilarious Dare challenge to complete',
   async execute(interaction) {
     const challenge = DARE_CHALLENGES[Math.floor(Math.random() * DARE_CHALLENGES.length)];
-    const embed = new EmbedBuilder()
-      .setColor(0xe74c3c)
-      .setTitle('⚡ Dare Challenge')
-      .setDescription(`### *"${challenge}"*\n\n> *No backing down now — complete the dare!*`)
-      .setFooter({ text: `Requested by ${interaction.user.username}` })
-      .setTimestamp();
-    return interaction.editReply({ embeds: [embed] });
+    return interaction.editReply(`⚡ **Dare Challenge for <@${interaction.user.id}>:**\n> "${challenge}"`);
   }
 };
 
@@ -888,13 +842,7 @@ export const affirmation = {
   description: 'Receive a boost of daily positive motivation and affirmation',
   async execute(interaction) {
     const quote = AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)];
-    const embed = new EmbedBuilder()
-      .setColor(0x2ecc71)
-      .setTitle('✨ Daily Affirmation & Sunshine')
-      .setDescription(`### ${quote}`)
-      .setFooter({ text: `You've got this, ${interaction.user.username}!` })
-      .setTimestamp();
-    return interaction.editReply({ embeds: [embed] });
+    return interaction.editReply(`✨ **Daily Affirmation for <@${interaction.user.id}>:**\n> ${quote}`);
   }
 };
 
@@ -904,27 +852,11 @@ export const flirt = {
   options: [{ name: 'user', description: 'Who to flirt with', type: 6, required: true }],
   async execute(interaction) {
     const target = interaction.options.getUser('user');
-    let flirtText;
-    try {
-      const response = await gemini.models.generateContent({
-        model: 'gemini-flash-latest',
-        contents: [{ role: 'user', parts: [{ text: `Write a smooth, charming, clever, PG-13 flirty line (1-2 sentences) aimed at someone named ${target.username}. Make it sweet and charismatic.` }] }],
-        config: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 200 }
-      });
-      flirtText = response.text?.trim() || `Are you always this charming, ${target.username}, or is today a special occasion? 😉`;
-    } catch (e) {
-      flirtText = `If beauty were a crime, ${target.username}, you'd be serving a life sentence! 💖`;
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor(0xff69b4)
-      .setTitle('💋 Flirt Incoming!')
-      .setDescription(`### <@${interaction.user.id}> flirts with <@${target.id}>:\n\n> *"${flirtText}"*`)
-      .setThumbnail(target.displayAvatarURL())
-      .setFooter({ text: 'Smooth operator in the server 😌' })
-      .setTimestamp();
-
-    return interaction.editReply({ embeds: [embed] });
+    const flirtText = await generateAiReply({
+      prompt: `Write a smooth, charming, clever, PG-13 flirty line (1-2 sentences) aimed at someone named ${target.username}. Make it sweet, charismatic and punchy.`,
+      maxTokens: 200
+    });
+    return interaction.editReply(`💋 **<@${interaction.user.id}> flirts with <@${target.id}>:**\n> *"${flirtText}"*`);
   }
 };
 
@@ -936,20 +868,10 @@ export const pickup = {
     const target = interaction.options.getUser('user');
     const line = PICKUP_LINES[Math.floor(Math.random() * PICKUP_LINES.length)];
 
-    const desc = target
-      ? `### <@${interaction.user.id}> whispers to <@${target.id}>:\n\n> *"${line}"*`
-      : `### *"${line}"*`;
-
-    const embed = new EmbedBuilder()
-      .setColor(0xff69b4)
-      .setTitle('💘 Pickup Line Delivery')
-      .setDescription(desc)
-      .setFooter({ text: '100% success rate (maybe) 😉' })
-      .setTimestamp();
-
-    if (target) embed.setThumbnail(target.displayAvatarURL());
-
-    return interaction.editReply({ embeds: [embed] });
+    if (target) {
+      return interaction.editReply(`💘 **<@${interaction.user.id}> whispers to <@${target.id}>:**\n> *"${line}"*`);
+    }
+    return interaction.editReply(`💘 *"${line}"*`);
   }
 };
 
