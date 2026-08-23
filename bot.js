@@ -4,12 +4,14 @@ import express from 'express';
 import cors from 'cors';
 import { Client, GatewayIntentBits } from 'discord.js';
 import { GoogleGenAI } from '@google/genai';
+import ffmpeg from 'ffmpeg-static';
 import commandsMap, { MODERATION_COMMAND_NAMES } from './src/commands/index.js';
 import { hasModPerms, getRandomNoPermMessage } from './src/utils/helpers.js';
 import db from './src/services/database.js';
 import musicManager from './src/services/music/MusicManager.js';
 
 // 🔧 Network & Process Configuration
+if (ffmpeg) process.env.FFMPEG_PATH = ffmpeg;
 dns.setDefaultResultOrder('ipv4first');
 
 // 🛡️ ANTI-CRASH ARMOR: Keeps bot alive on unexpected network or API hiccups
