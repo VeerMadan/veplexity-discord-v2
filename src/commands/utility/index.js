@@ -101,17 +101,6 @@ export const avatar = {
   }
 };
 
-export const rate = {
-  name: 'rate',
-  description: 'Get a rating out of 10 for anything',
-  options: [{ name: 'thing', description: 'What to rate', type: 3, required: true }],
-  async execute(interaction) {
-    const thing = interaction.options.getString('thing');
-    const rating = Math.floor(Math.random() * 11);
-    return interaction.editReply(`📊 I'd rate **${thing}** a solid **${rating}/10**.`);
-  }
-};
-
 export const poll = {
   name: 'poll',
   description: 'Create a yes/no poll',
