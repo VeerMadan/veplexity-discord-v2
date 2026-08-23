@@ -5,10 +5,14 @@ import {
   AudioPlayerStatus,
   VoiceConnectionStatus,
   entersState,
-  getVoiceConnection
+  getVoiceConnection,
+  generateDependencyReport
 } from '@discordjs/voice';
 import streamResolver from './StreamResolver.js';
 import { createProgressBar, formatMs } from '../../utils/helpers.js';
+
+// Log voice dependency report once at import time
+console.log('[Voice] Dependency report:\n' + generateDependencyReport());
 
 class GuildQueue {
   constructor(manager, guildId, voiceChannel, textChannel) {
@@ -19,7 +23,7 @@ class GuildQueue {
     this.tracks = [];
     this.current = null;
     this.currentResource = null;
-    this.volume = 1.0; // 100%
+    this.volume = 1.0;
     this.repeatMode = 'off'; // 'off' | 'track' | 'queue'
     this.is247 = false;
     this.isPlaying = false;
@@ -32,7 +36,7 @@ class GuildQueue {
     this.player = createAudioPlayer({
       behaviors: {
         noSubscriber: NoSubscriberBehavior.Play,
-        maxMissedFrames: 50
+        maxMissedFrames: 250
       }
     });
     this.connection = null;
@@ -41,15 +45,19 @@ class GuildQueue {
 
   setupListeners() {
     this.player.on(AudioPlayerStatus.Playing, () => {
-      console.log(`[MusicQueue ${this.guildId}] 🔊 Audio player is now PLAYING audio packets to Discord voice!`);
+      console.log(`[MusicQueue ${this.guildId}] 🔊 Player: PLAYING`);
     });
 
     this.player.on(AudioPlayerStatus.Buffering, () => {
-      console.log(`[MusicQueue ${this.guildId}] ⏳ Audio player is BUFFERING...`);
+      console.log(`[MusicQueue ${this.guildId}] ⏳ Player: BUFFERING`);
+    });
+
+    this.player.on(AudioPlayerStatus.AutoPaused, () => {
+      console.log(`[MusicQueue ${this.guildId}] ⏸️ Player: AUTOPAUSED (no active voice subscriber yet)`);
     });
 
     this.player.on(AudioPlayerStatus.Idle, () => {
-      console.log(`[MusicQueue ${this.guildId}] ⏹️ Audio player IDLE`);
+      console.log(`[MusicQueue ${this.guildId}] ⏹️ Player: IDLE`);
       this.isPlaying = false;
       this.cleanUpCurrentResource();
 
@@ -65,10 +73,6 @@ class GuildQueue {
       this.playNext();
     });
 
-    this.player.on('stateChange', (oldState, newState) => {
-      console.log(`[MusicQueue ${this.guildId}] 🔄 Player state: ${oldState.status} -> ${newState.status}`);
-    });
-
     this.player.on('error', error => {
       console.error(`[MusicQueue ${this.guildId}] ❌ Player error:`, error.message);
       this.isPlaying = false;
@@ -79,25 +83,44 @@ class GuildQueue {
   }
 
   cleanUpCurrentResource() {
+    if (this.currentResource?._ffmpegProc) {
+      try { this.currentResource._ffmpegProc.kill('SIGTERM'); } catch {}
+    }
     if (this.currentResource?._pcmStream) {
-      try {
-        this.currentResource._pcmStream.destroy();
-      } catch (e) {}
+      try { this.currentResource._pcmStream.destroy(); } catch {}
     }
     if (this.currentResource?._ytStream) {
-      try {
-        this.currentResource._ytStream.destroy();
-      } catch (e) {}
+      try { this.currentResource._ytStream.destroy(); } catch {}
     }
     this.currentResource = null;
   }
 
-  connect() {
-    if (this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+  /**
+   * Joins the voice channel and waits until the connection is fully Ready
+   * before returning. This guarantees the UDP socket is open and audio
+   * packets will actually reach Discord.
+   */
+  async connect() {
+    // If we already have a Ready connection, just re-subscribe and return
+    if (this.connection && this.connection.state.status === VoiceConnectionStatus.Ready) {
+      this.connection.subscribe(this.player);
       return this.connection;
     }
 
+    // Destroy any stale non-Ready connection (avoids ghost sessions)
+    if (this.connection && this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+      try { this.connection.destroy(); } catch {}
+      this.connection = null;
+    }
+
+    // Also clean up orphaned connections from previous bot runs
+    const orphan = getVoiceConnection(this.guildId);
+    if (orphan) {
+      try { orphan.destroy(); } catch {}
+    }
+
     console.log(`[MusicQueue ${this.guildId}] 🔌 Joining voice channel ${this.voiceChannel.id}...`);
+
     this.connection = joinVoiceChannel({
       channelId: this.voiceChannel.id,
       guildId: this.guildId,
@@ -106,28 +129,34 @@ class GuildQueue {
       selfMute: false
     });
 
-    this.connection.subscribe(this.player);
-
-    this.connection.on(VoiceConnectionStatus.Ready, () => {
-      console.log(`[MusicQueue ${this.guildId}] ✅ Voice connection is READY!`);
-      this.connection.subscribe(this.player);
-      if (this.player.state.status === AudioPlayerStatus.AutoPaused) {
-        this.player.unpause();
-      }
+    // Log every connection state transition
+    this.connection.on('stateChange', (oldState, newState) => {
+      console.log(`[MusicQueue ${this.guildId}] 🔗 Voice: ${oldState.status} → ${newState.status}`);
     });
 
+    // Handle disconnection with reconnect attempt
     this.connection.on(VoiceConnectionStatus.Disconnected, async () => {
       try {
         await Promise.race([
           entersState(this.connection, VoiceConnectionStatus.Signalling, 5000),
           entersState(this.connection, VoiceConnectionStatus.Connecting, 5000),
         ]);
-      } catch (error) {
-        if (!this.is247) {
-          this.destroy();
-        }
+      } catch {
+        if (!this.is247) this.destroy();
       }
     });
+
+    // ── Wait for the UDP voice socket to be Ready ────────────────────
+    try {
+      await entersState(this.connection, VoiceConnectionStatus.Ready, 30_000);
+      console.log(`[MusicQueue ${this.guildId}] ✅ Voice connection READY`);
+    } catch (e) {
+      console.warn(`[MusicQueue ${this.guildId}] ⚠️ Voice connection did not reach Ready in 30s (state: ${this.connection.state.status}). Proceeding anyway.`);
+    }
+
+    // Subscribe the audio player to the connection AFTER it's ready
+    this.connection.subscribe(this.player);
+    console.log(`[MusicQueue ${this.guildId}] 🎧 Player subscribed to voice connection`);
 
     return this.connection;
   }
@@ -145,17 +174,19 @@ class GuildQueue {
     this.current = nextTrack;
 
     try {
-      this.connect();
-      console.log(`[MusicQueue ${this.guildId}] ▶️ Preparing to stream: ${nextTrack.title} by ${nextTrack.author}`);
-      const streamUrl = await streamResolver.getDirectStreamUrl(nextTrack);
-      if (!streamUrl) {
+      // Ensure voice connection is Ready before we start streaming
+      await this.connect();
+
+      console.log(`[MusicQueue ${this.guildId}] ▶️ Streaming: ${nextTrack.title} by ${nextTrack.author}`);
+      const streamQuery = await streamResolver.getDirectStreamUrl(nextTrack);
+      if (!streamQuery) {
         this.textChannel?.send(`❌ Could not stream **${nextTrack.title}**, skipping...`).catch(() => null);
         return this.playNext();
       }
 
-      this.currentResource = await streamResolver.createAudioResource(streamUrl, this.volume);
+      this.currentResource = await streamResolver.createAudioResource(streamQuery, this.volume);
       this.player.play(this.currentResource);
-      console.log(`[MusicQueue ${this.guildId}] 🚀 player.play() dispatched for: ${nextTrack.title}`);
+      console.log(`[MusicQueue ${this.guildId}] 🚀 player.play() dispatched`);
       this.isPlaying = true;
       this.isPaused = false;
       this.startedAt = Date.now();
@@ -182,7 +213,7 @@ class GuildQueue {
         this.textChannel?.send('👋 Disconnecting from voice channel due to inactivity.').catch(() => null);
         this.destroy();
       }
-    }, 60000); // 1 minute idle timeout
+    }, 60000);
   }
 
   clearIdleDisconnect() {
@@ -268,6 +299,7 @@ class GuildQueue {
         connection.destroy();
       } catch (e) {}
     }
+    this.connection = null;
     this.manager.queues.delete(this.guildId);
   }
 }
@@ -300,12 +332,19 @@ class MusicManager {
     }
 
     const queue = this.getOrCreateQueue(interaction.guildId, voiceChannel, interaction.channel);
-    queue.connect();
+
+    // Start connecting immediately (runs in background while we resolve tracks)
+    const connectPromise = queue.connect().catch(e => {
+      console.error(`[MusicManager] Pre-connect error (non-fatal):`, e.message);
+    });
 
     const tracks = await streamResolver.resolveTracks(query, interaction.user);
     if (!tracks || tracks.length === 0) {
       return interaction.editReply(`❌ No results found for: \`${query}\``);
     }
+
+    // Make sure connection is established before we start playback
+    await connectPromise;
 
     if (tracks.length === 1) {
       const track = tracks[0];

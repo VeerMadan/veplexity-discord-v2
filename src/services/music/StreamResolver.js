@@ -2,13 +2,11 @@ import YTDlpWrap from 'yt-dlp-wrap';
 import { createAudioResource, StreamType } from '@discordjs/voice';
 import spotifyUrlInfo from 'spotify-url-info';
 import YouTube from 'youtube-sr';
-import prism from 'prism-media';
-import ffmpeg from 'ffmpeg-static';
+import ffmpegStatic from 'ffmpeg-static';
+import { spawn } from 'node:child_process';
 import fs from 'fs';
 import path from 'path';
 import { formatSeconds } from '../../utils/helpers.js';
-
-if (ffmpeg) process.env.FFMPEG_PATH = ffmpeg;
 
 const YTDlp = YTDlpWrap.default || YTDlpWrap;
 const ytSearcher = YouTube.default || YouTube;
@@ -18,6 +16,9 @@ const BINARY_NAME = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
 const BINARY_PATH = path.resolve(`./${BINARY_NAME}`);
 
 const spotify = spotifyUrlInfo(fetch);
+
+// Use system ffmpeg on Linux (installed via apt), ffmpeg-static on Windows
+const FFMPEG_CMD = (!isWindows) ? 'ffmpeg' : (ffmpegStatic || 'ffmpeg');
 
 class StreamResolverService {
   constructor() {
@@ -31,19 +32,13 @@ class StreamResolverService {
         console.log(`[StreamResolver] Downloading yt-dlp binary to ${BINARY_PATH}...`);
         await YTDlp.downloadFromGithub(BINARY_PATH);
         if (!isWindows) {
-          try {
-            fs.chmodSync(BINARY_PATH, 0o755);
-          } catch (e) {
-            console.error('[StreamResolver] Failed to set chmod +x on yt-dlp:', e);
+          try { fs.chmodSync(BINARY_PATH, 0o755); } catch (e) {
+            console.error('[StreamResolver] chmod +x failed:', e);
           }
         }
-        console.log('[StreamResolver] yt-dlp binary downloaded successfully.');
-      } else {
-        if (!isWindows) {
-          try {
-            fs.chmodSync(BINARY_PATH, 0o755);
-          } catch (e) {}
-        }
+        console.log('[StreamResolver] yt-dlp binary downloaded.');
+      } else if (!isWindows) {
+        try { fs.chmodSync(BINARY_PATH, 0o755); } catch {}
       }
       this.ytDlp = new YTDlp(BINARY_PATH);
       const version = await this.ytDlp.getVersion();
@@ -96,20 +91,15 @@ class StreamResolverService {
           const title = data.name || 'Unknown Title';
           const artist = data.artists?.map(a => a.name).join(', ') || 'Unknown Artist';
           const durationSec = Math.round((data.duration || 0) / 1000);
-
           return [{
-            title,
-            author: artist,
+            title, author: artist,
             searchQuery: `${title} ${artist}`,
-            url: null,
-            sourceUrl: trimmed,
-            durationSec,
+            url: null, sourceUrl: trimmed, durationSec,
             duration: formatSeconds(durationSec),
             thumbnail: data.coverArt?.sources?.[0]?.url || null,
             requestedBy
           }];
         }
-
         if (/spotify\.com\/(album|playlist)\//i.test(trimmed)) {
           const tracks = await spotify.getTracks(trimmed);
           return tracks.map(t => {
@@ -117,15 +107,11 @@ class StreamResolverService {
             const artist = Array.isArray(t.artists) ? t.artists.map(a => a.name || a).join(', ') : (t.artist || 'Unknown Artist');
             const durationSec = Math.round((t.duration || t.duration_ms || 0) / 1000);
             return {
-              title,
-              author: artist,
+              title, author: artist,
               searchQuery: `${title} ${artist}`,
-              url: null,
-              sourceUrl: trimmed,
-              durationSec,
+              url: null, sourceUrl: trimmed, durationSec,
               duration: formatSeconds(durationSec),
-              thumbnail: null,
-              requestedBy
+              thumbnail: null, requestedBy
             };
           });
         }
@@ -176,15 +162,9 @@ class StreamResolverService {
       } catch (e) {
         console.error('[StreamResolver] YouTube video info error:', e);
         return [{
-          title: 'YouTube Track',
-          author: 'Unknown Artist',
-          searchQuery: trimmed,
-          url: trimmed,
-          sourceUrl: trimmed,
-          durationSec: 0,
-          duration: '0:00',
-          thumbnail: null,
-          requestedBy
+          title: 'YouTube Track', author: 'Unknown Artist',
+          searchQuery: trimmed, url: trimmed, sourceUrl: trimmed,
+          durationSec: 0, duration: '0:00', thumbnail: null, requestedBy
         }];
       }
     }
@@ -194,15 +174,11 @@ class StreamResolverService {
     if (searchResults.length > 0) {
       const top = searchResults[0];
       return [{
-        title: top.title,
-        author: top.author,
+        title: top.title, author: top.author,
         searchQuery: `${top.title} ${top.author}`.trim(),
-        url: top.url,
-        sourceUrl: top.url,
-        durationSec: top.durationSec,
-        duration: top.duration,
-        thumbnail: top.thumbnail,
-        requestedBy
+        url: top.url, sourceUrl: top.url,
+        durationSec: top.durationSec, duration: top.duration,
+        thumbnail: top.thumbnail, requestedBy
       }];
     }
 
@@ -216,6 +192,14 @@ class StreamResolverService {
     return null;
   }
 
+  /**
+   * Creates an AudioResource by:
+   *  1. Using yt-dlp to extract the direct CDN audio URL (no piping raw bytes)
+   *  2. Spawning system ffmpeg to stream that URL and output 48kHz stereo PCM
+   *  3. Feeding ffmpeg's PCM stdout into @discordjs/voice as StreamType.Raw
+   *
+   * This avoids all intermediate pipe/prism-media issues.
+   */
   async createAudioResource(queryOrUrl, volume = 1.0) {
     if (!this.ytDlp) {
       this.ytDlp = new YTDlp(BINARY_PATH);
@@ -224,35 +208,53 @@ class StreamResolverService {
     const clean = String(queryOrUrl).trim();
     const sourceTarget = clean.startsWith('http') ? clean : `scsearch1:${clean}`;
 
-    const flags = [
-      sourceTarget,
-      '-f', 'ba/b',
-      '-o', '-',
-      '--no-warnings'
-    ];
+    // ── Step 1: Extract the direct CDN audio URL ──────────────────────
+    console.log(`[StreamResolver] Extracting audio URL for: ${sourceTarget.slice(0, 60)}`);
+    const raw = await this.ytDlp.execPromise([
+      sourceTarget, '-f', 'ba/b', '--get-url', '--no-warnings'
+    ]);
+    const audioUrl = raw.trim().split('\n')[0];
 
-    const rawStream = this.ytDlp.execStream(flags);
+    if (!audioUrl || !audioUrl.startsWith('http')) {
+      throw new Error(`Failed to extract audio URL from: ${sourceTarget}`);
+    }
+    console.log(`[StreamResolver] Got CDN URL: ${audioUrl.slice(0, 80)}...`);
 
-    const transcoder = new prism.FFmpeg({
-      command: ffmpeg || process.env.FFMPEG_PATH || 'ffmpeg',
-      args: [
-        '-f', 's16le',
-        '-ar', '48000',
-        '-ac', '2'
-      ],
+    // ── Step 2: Spawn system ffmpeg to stream URL → 48kHz PCM stdout ─
+    //    -reconnect flags keep the HTTP stream alive on network hiccups.
+    //    Input options (-analyzeduration, -loglevel) come BEFORE -i.
+    //    Output options (-f, -ar, -ac) come AFTER -i.
+    const ffmpegProc = spawn(FFMPEG_CMD, [
+      '-reconnect',        '1',
+      '-reconnect_streamed', '1',
+      '-reconnect_delay_max', '5',
+      '-analyzeduration',  '0',
+      '-loglevel',         '0',
+      '-i',                audioUrl,
+      '-f',                's16le',
+      '-ar',               '48000',
+      '-ac',               '2',
+      'pipe:1'
+    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+    ffmpegProc.on('error', e => {
+      console.error('[StreamResolver] ffmpeg process error:', e.message);
+    });
+    ffmpegProc.stderr.on('data', d => {
+      const msg = d.toString().trim();
+      if (msg) console.error('[StreamResolver] ffmpeg stderr:', msg);
     });
 
-    const pcmStream = rawStream.pipe(transcoder);
-
-    const resource = createAudioResource(pcmStream, {
+    // ── Step 3: Create Discord AudioResource from PCM stdout ─────────
+    const resource = createAudioResource(ffmpegProc.stdout, {
       inputType: StreamType.Raw,
       inlineVolume: true
     });
 
     resource.volume?.setVolume(volume);
-    resource._ytStream = rawStream;
-    resource._pcmStream = pcmStream;
+    resource._ffmpegProc = ffmpegProc;
 
+    console.log('[StreamResolver] AudioResource created from ffmpeg PCM stream');
     return resource;
   }
 }
