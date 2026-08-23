@@ -12,6 +12,7 @@ const ytSearcher = YouTube.default || YouTube;
 const isWindows = process.platform === 'win32';
 const BINARY_NAME = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
 const BINARY_PATH = path.resolve(`./${BINARY_NAME}`);
+const COOKIES_PATH = path.resolve('./cookies.txt');
 
 const spotify = spotifyUrlInfo(fetch);
 
@@ -169,7 +170,6 @@ class StreamResolverService {
         }
       } catch (e) {
         console.error('[StreamResolver] YouTube video info error:', e);
-        // Fallback: use URL directly
         return [{
           title: 'YouTube Track',
           author: 'Unknown Artist',
@@ -224,14 +224,23 @@ class StreamResolverService {
       this.ytDlp = new YTDlp(BINARY_PATH);
     }
 
+    const baseFlags = [
+      '-f', 'ba/b',
+      '--no-warnings',
+      '--js-runtimes', 'node',
+      '--extractor-args', 'youtube:player_client=android_music,android,tv_embedded'
+    ];
+
+    if (fs.existsSync(COOKIES_PATH)) {
+      baseFlags.push('--cookies', COOKIES_PATH);
+    }
+
     try {
       // 1. Extract direct googlevideo CDN stream URL using Android Music / TV Embedded clients
       const raw = await this.ytDlp.execPromise([
         streamUrl,
-        '-f', 'ba/b',
         '--get-url',
-        '--no-warnings',
-        '--extractor-args', 'youtube:player_client=android_music,tv_embedded,android_creator'
+        ...baseFlags
       ]);
       const directUrl = raw.trim().split('\n')[0];
       if (directUrl && directUrl.startsWith('http')) {
@@ -249,10 +258,8 @@ class StreamResolverService {
     // 2. Fallback to child process execStream
     const flags = [
       streamUrl,
-      '-f', 'ba/b',
       '-o', '-',
-      '--no-warnings',
-      '--extractor-args', 'youtube:player_client=android_music,tv_embedded,android_creator'
+      ...baseFlags
     ];
 
     const stream = this.ytDlp.execStream(flags);
