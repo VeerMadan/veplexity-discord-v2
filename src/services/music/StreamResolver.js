@@ -219,19 +219,39 @@ class StreamResolverService {
     return null;
   }
 
-  createAudioResource(streamUrl, volume = 1.0) {
+  async createAudioResource(streamUrl, volume = 1.0) {
     if (!this.ytDlp) {
       this.ytDlp = new YTDlp(BINARY_PATH);
     }
 
+    try {
+      // 1. Extract direct googlevideo CDN stream URL using Android Music / TV Embedded clients
+      const raw = await this.ytDlp.execPromise([
+        streamUrl,
+        '-f', 'ba/b',
+        '--get-url',
+        '--no-warnings',
+        '--extractor-args', 'youtube:player_client=android_music,tv_embedded,android_creator'
+      ]);
+      const directUrl = raw.trim().split('\n')[0];
+      if (directUrl && directUrl.startsWith('http')) {
+        const resource = createAudioResource(directUrl, {
+          inputType: StreamType.Arbitrary,
+          inlineVolume: true
+        });
+        resource.volume?.setVolume(volume);
+        return resource;
+      }
+    } catch (e) {
+      console.log('[StreamResolver] Direct CDN URL extraction note:', e.message);
+    }
+
+    // 2. Fallback to child process execStream
     const flags = [
       streamUrl,
       '-f', 'ba/b',
       '-o', '-',
       '--no-warnings',
-      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-      '--referer', 'https://www.youtube.com/',
-      '--add-header', 'Accept-Language: en-US,en;q=0.9',
       '--extractor-args', 'youtube:player_client=android_music,tv_embedded,android_creator'
     ];
 

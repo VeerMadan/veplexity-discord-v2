@@ -117,7 +117,7 @@ class GuildQueue {
         return this.playNext();
       }
 
-      this.currentResource = streamResolver.createAudioResource(streamUrl, this.volume);
+      this.currentResource = await streamResolver.createAudioResource(streamUrl, this.volume);
       this.player.play(this.currentResource);
       this.isPlaying = true;
       this.isPaused = false;

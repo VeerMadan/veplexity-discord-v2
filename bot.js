@@ -99,7 +99,9 @@ client.on('interactionCreate', async (interaction) => {
       try {
         await command.autocomplete(interaction);
       } catch (err) {
-        console.error(`[Autocomplete Error] ${interaction.commandName}:`, err.message);
+        if (err.code !== 10062 && err.message !== 'Unknown interaction') {
+          console.error(`[Autocomplete Error] ${interaction.commandName}:`, err.message);
+        }
         return interaction.respond([]).catch(() => {});
       }
     }
