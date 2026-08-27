@@ -848,15 +848,15 @@ export const affirmation = {
 
 export const flirt = {
   name: 'flirt',
-  description: 'Generate a bold, spicy, and seductive flirty message for someone',
+  description: 'Generate a sleek, bold, and seductive English flirty message for someone',
   options: [{ name: 'user', description: 'Who to flirt with', type: 6, required: true }],
   async execute(interaction) {
     const target = interaction.options.getUser('user');
     const flirtText = await generateAiReply({
-      prompt: `Write an intensely bold, spicy, seductive, and irresistible flirty line (1-2 sentences) in catchy Hinglish/English directed at ${target.username}. Make it daring, confident, and teasing enough to make them blush and feel butterflies.`,
+      prompt: `Write a sleek, dangerously charming, bold, and seductive flirty line (1-2 short sentences) directed at ${target.username}. STRICTLY IN MODERN ENGLISH. NO cheesy metaphors or cringe jokes. Make it confident, teasing, magnetic, and genuinely smooth.`,
       maxTokens: 200
     });
-    return interaction.editReply(`💋 **<@${interaction.user.id}> whispers boldly to <@${target.id}>:**\n> *"${flirtText}"*`);
+    return interaction.editReply(`💋 **<@${interaction.user.id}> whispers to <@${target.id}>:**\n> *"${flirtText}"*`);
   }
 };
 
