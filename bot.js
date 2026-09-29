@@ -3,23 +3,24 @@ import dns from 'node:dns';
 import express from 'express';
 import cors from 'cors';
 import { Client, GatewayIntentBits } from 'discord.js';
-import { GoogleGenAI } from '@google/genai';
 import ffmpeg from 'ffmpeg-static';
 import commandsMap, { MODERATION_COMMAND_NAMES } from './src/commands/index.js';
 import { hasModPerms, getRandomNoPermMessage } from './src/utils/helpers.js';
 import db from './src/services/database.js';
 import musicManager from './src/services/music/MusicManager.js';
+import { generateAiReply } from './src/services/aiService.js';
+import { deletedMessages, editedMessages } from './src/services/snipeService.js';
 
 // 🔧 Network & Process Configuration
 if (ffmpeg) process.env.FFMPEG_PATH = ffmpeg;
 dns.setDefaultResultOrder('ipv4first');
 
 // 🛡️ ANTI-CRASH ARMOR: Keeps bot alive on unexpected network or API hiccups
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   console.error('[Anti-Crash] Unhandled Rejection:', reason);
 });
 
-process.on('uncaughtException', (err, origin) => {
+process.on('uncaughtException', (err) => {
   console.error('[Anti-Crash] Uncaught Exception:', err);
 });
 
@@ -35,23 +36,95 @@ const client = new Client({
 
 client.on('error', err => console.error(`[Discord Client Error] ${err.message}`));
 
-// 🧠 MULTI-ENGINE AI CHATBOT SETUP (Groq / OpenRouter / Gemini with auto-fallback)
-import { generateAiReply } from './src/services/aiService.js';
+// 🕵️ CAUGHT IN 4K: SNIPE & EDIT-SNIPE LISTENERS
+client.on('messageDelete', (message) => {
+  if (!message.guild || message.author?.bot) return;
+  const attachmentUrl = message.attachments?.first()?.proxyURL || message.attachments?.first()?.url || null;
+  if (!message.content && !attachmentUrl) return;
+
+  deletedMessages.set(message.channelId, {
+    content: message.content || '',
+    authorTag: message.author?.tag || 'Unknown User',
+    authorId: message.author?.id,
+    authorAvatar: message.author?.displayAvatarURL?.() || null,
+    image: attachmentUrl,
+    timestamp: Date.now()
+  });
+});
+
+client.on('messageUpdate', (oldMessage, newMessage) => {
+  if (!newMessage.guild || newMessage.author?.bot) return;
+  if (!oldMessage.content || !newMessage.content) return;
+  if (oldMessage.content === newMessage.content) return;
+
+  editedMessages.set(newMessage.channelId, {
+    oldContent: oldMessage.content,
+    newContent: newMessage.content,
+    authorTag: newMessage.author?.tag || 'Unknown User',
+    authorId: newMessage.author?.id,
+    authorAvatar: newMessage.author?.displayAvatarURL?.() || null,
+    timestamp: Date.now()
+  });
+});
+
+// 🧠 MEMORY & COOLDOWN MAPS
 const channelMemory = new Map(); // channelId -> [{role, content}]
 const chatbotCooldown = new Map(); // userId -> timestamp
+const xpCooldown = new Map(); // userId -> timestamp
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
-  if (!db.isChatbotEnabled(message.guildId)) return;
-  if (!message.mentions.has(client.user)) return;
 
   const now = Date.now();
+
+  // 1️⃣ AFK AUTO-CLEAR & PING RESPONDER
+  if (db.removeAfk(message.author.id)) {
+    message.reply(`👋 Welcome back **${message.author.displayName || message.author.username}**! I've removed your AFK status.`)
+      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 8000))
+      .catch(() => {});
+  }
+
+  if (message.mentions.users.size > 0) {
+    for (const [mentionedId, mentionedUser] of message.mentions.users) {
+      if (mentionedId === message.author.id || mentionedUser.bot) continue;
+      const afkData = db.getAfk(mentionedId);
+      if (afkData) {
+        const unixSec = Math.floor(afkData.timestamp / 1000);
+        message.reply(`💤 **${mentionedUser.displayName || mentionedUser.username}** is currently AFK: *"${afkData.reason}"* (since <t:${unixSec}:R>)`).catch(() => {});
+      }
+    }
+  }
+
+  // 2️⃣ PASSIVE XP & LEVELING ENGINE
+  const lastXp = xpCooldown.get(message.author.id) || 0;
+  if (now - lastXp >= 30000 && message.content.length >= 3) {
+    xpCooldown.set(message.author.id, now);
+    const xpGain = Math.floor(Math.random() * 16) + 15; // 15 - 30 XP
+    const { leveledUp, newLevel, reward } = db.addXp(message.author.id, xpGain);
+    if (leveledUp) {
+      message.channel.send(
+        `🎉 **LEVEL UP!** GG <@${message.author.id}>, you just reached **Level ${newLevel}** and pocketed a **₹${reward.toLocaleString('en-IN')}** cash bonus! 💰`
+      ).catch(() => {});
+    }
+  }
+
+  // 3️⃣ MULTI-ENGINE AI CHATBOT (Responds on @mention OR direct reply to bot)
+  if (!db.isChatbotEnabled(message.guildId)) return;
+
+  const isMentioned = message.mentions.has(client.user);
+  const isReplyToBot = message.reference?.messageId && message.mentions.repliedUser?.id === client.user.id;
+  if (!isMentioned && !isReplyToBot) return;
+
   const lastUsed = chatbotCooldown.get(message.author.id) || 0;
-  if (now - lastUsed < 3000) return; // 3s cooldown
+  if (now - lastUsed < 2500) return; // 2.5s anti-spam cooldown
   chatbotCooldown.set(message.author.id, now);
 
-  const question = message.content.replace(/<@!?\d+>/g, '').trim();
-  if (!question) return;
+  const cleanText = message.content.replace(/<@!?\d+>/g, '').trim();
+  if (!cleanText) return;
+
+  const senderName = message.author.displayName || message.author.username;
+  const contextualPrompt = `[User "${senderName}" says]: ${cleanText}`;
+  const activeMode = db.getAiMode(message.guildId);
 
   await message.channel.sendTyping().catch(() => {});
 
@@ -59,21 +132,19 @@ client.on('messageCreate', async (message) => {
 
   try {
     const reply = await generateAiReply({
-      prompt: question,
+      prompt: contextualPrompt,
+      mode: activeMode,
       history,
       maxTokens: 400
     });
 
     await message.reply(reply.slice(0, 2000));
 
-    history.push({ role: 'user', content: question });
+    history.push({ role: 'user', content: contextualPrompt });
     history.push({ role: 'model', content: reply });
-    channelMemory.set(message.channelId, history.slice(-10));
+    channelMemory.set(message.channelId, history.slice(-12));
   } catch (error) {
     console.error('[Chatbot Error]', error.message);
-    if (error.message === 'RATE_LIMITED') {
-      return message.reply("⏳ Whoa, high traffic right now! Taking a quick 5-second breather.").catch(() => null);
-    }
     await message.reply("Arey yaar, dimag thoda garam ho gaya tha! Ab bolo kya bol rahe the? 😌").catch(() => null);
   }
 });
@@ -114,9 +185,13 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // 🛡️ DEFERRAL (Prevents 3s Discord timeout crash)
+  // 🛡️ DEFERRAL (Ephemeral for /confess so identity stays 100% hidden!)
   try {
-    await interaction.deferReply();
+    if (commandName === 'confess') {
+      await interaction.deferReply({ ephemeral: true });
+    } else {
+      await interaction.deferReply();
+    }
   } catch (err) {
     console.log('[Anti-Crash] Interaction expired before deferral.');
     return;
@@ -149,6 +224,28 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     }
   }
 });
+
+// ⏰ PERSISTENT REMINDERS LOOP
+setInterval(async () => {
+  if (!client.isReady()) return;
+  const due = db.getDueReminders();
+  for (const rem of due) {
+    db.removeReminder(rem.id);
+    try {
+      const user = await client.users.fetch(rem.userId).catch(() => null);
+      if (user) {
+        await user.send(`⏰ **Reminder:** ${rem.text}`).catch(async () => {
+          const channel = await client.channels.fetch(rem.channelId).catch(() => null);
+          if (channel?.isTextBased()) {
+            await channel.send(`⏰ <@${rem.userId}> **Reminder:** ${rem.text}`).catch(() => {});
+          }
+        });
+      }
+    } catch (e) {
+      // Ignore delivery errors
+    }
+  }
+}, 15000);
 
 // 🚀 READY EVENT
 client.once('clientReady', () => {

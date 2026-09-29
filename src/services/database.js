@@ -15,8 +15,31 @@ function initialData() {
     cases: {},
     caseCounter: 0,
     chatbotGuilds: [],
+    aiModes: {},
     pvcRevoked: [],
-    notes: {}
+    notes: {},
+    users: {},
+    afk: {},
+    reminders: [],
+    confessionChannel: {}
+  };
+}
+
+function defaultUserProfile() {
+  return {
+    wallet: 500,
+    bank: 0,
+    lastDaily: 0,
+    dailyStreak: 0,
+    lastWork: 0,
+    lastRob: 0,
+    lastRep: 0,
+    xp: 0,
+    level: 1,
+    rep: 0,
+    partner: null,
+    marriedAt: null,
+    bio: 'Just vibing in the server ✨'
   };
 }
 
@@ -39,8 +62,13 @@ class DatabaseService {
       parsed.cases ??= {};
       parsed.caseCounter ??= Object.keys(parsed.cases).length;
       parsed.chatbotGuilds ??= [];
+      parsed.aiModes ??= {};
       parsed.pvcRevoked ??= [];
       parsed.notes ??= {};
+      parsed.users ??= {};
+      parsed.afk ??= {};
+      parsed.reminders ??= [];
+      parsed.confessionChannel ??= {};
       return parsed;
     } catch (e) {
       console.error('[Database] Failed to load data, using default:', e);
@@ -149,7 +177,7 @@ class DatabaseService {
     return this.data.pvcRevoked.includes(userId);
   }
 
-  // --- CHATBOT ---
+  // --- CHATBOT & AI MODES ---
   setChatbotGuild(guildId, enabled) {
     if (enabled) {
       if (!this.data.chatbotGuilds.includes(guildId)) {
@@ -163,6 +191,115 @@ class DatabaseService {
 
   isChatbotEnabled(guildId) {
     return this.data.chatbotGuilds.includes(guildId);
+  }
+
+  setAiMode(guildId, mode) {
+    this.data.aiModes[guildId] = mode;
+    this.save();
+  }
+
+  getAiMode(guildId) {
+    return this.data.aiModes[guildId] || 'default';
+  }
+
+  // --- USER ECONOMY, XP & PROFILES ---
+  getUser(userId) {
+    if (!this.data.users[userId]) {
+      this.data.users[userId] = defaultUserProfile();
+      this.save();
+    } else {
+      this.data.users[userId] = { ...defaultUserProfile(), ...this.data.users[userId] };
+    }
+    return this.data.users[userId];
+  }
+
+  updateUser(userId, updates) {
+    const current = this.getUser(userId);
+    this.data.users[userId] = { ...current, ...updates };
+    this.save();
+    return this.data.users[userId];
+  }
+
+  addMoney(userId, amount, toBank = false) {
+    const user = this.getUser(userId);
+    if (toBank) {
+      user.bank = Math.max(0, (user.bank || 0) + amount);
+    } else {
+      user.wallet = Math.max(0, (user.wallet || 0) + amount);
+    }
+    this.data.users[userId] = user;
+    this.save();
+    return user;
+  }
+
+  addXp(userId, xpGain) {
+    const user = this.getUser(userId);
+    user.xp = (user.xp || 0) + xpGain;
+    const xpNeeded = user.level * 150;
+    let leveledUp = false;
+    if (user.xp >= xpNeeded) {
+      user.xp -= xpNeeded;
+      user.level = (user.level || 1) + 1;
+      user.wallet = (user.wallet || 0) + (user.level * 250); // Level up cash reward!
+      leveledUp = true;
+    }
+    this.data.users[userId] = user;
+    this.save();
+    return { leveledUp, newLevel: user.level, reward: user.level * 250, user };
+  }
+
+  getTopBalances(limit = 10) {
+    return Object.entries(this.data.users)
+      .map(([id, u]) => ({ id, total: (u.wallet || 0) + (u.bank || 0), wallet: u.wallet || 0, bank: u.bank || 0 }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, limit);
+  }
+
+  getTopLevels(limit = 10) {
+    return Object.entries(this.data.users)
+      .map(([id, u]) => ({ id, level: u.level || 1, xp: u.xp || 0, rep: u.rep || 0 }))
+      .sort((a, b) => (b.level - a.level) || (b.xp - a.xp))
+      .slice(0, limit);
+  }
+
+  // --- AFK SYSTEM ---
+  setAfk(userId, reason) {
+    this.data.afk[userId] = {
+      reason: reason || 'AFK',
+      timestamp: Date.now()
+    };
+    this.save();
+  }
+
+  getAfk(userId) {
+    return this.data.afk[userId] || null;
+  }
+
+  removeAfk(userId) {
+    if (this.data.afk[userId]) {
+      delete this.data.afk[userId];
+      this.save();
+      return true;
+    }
+    return false;
+  }
+
+  // --- PERSISTENT REMINDERS ---
+  addReminder({ userId, channelId, text, triggerAt }) {
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    this.data.reminders.push({ id, userId, channelId, text, triggerAt });
+    this.save();
+    return id;
+  }
+
+  getDueReminders() {
+    const now = Date.now();
+    return this.data.reminders.filter(r => r.triggerAt <= now);
+  }
+
+  removeReminder(id) {
+    this.data.reminders = this.data.reminders.filter(r => r.id !== id);
+    this.save();
   }
 }
 

@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 
-const DEFAULT_SYSTEM_PROMPT = `You're VePlexity — an absolutely unfiltered, savage, confident, and magnetic Discord regular. You are NOT a helpful assistant. You speak freely with ZERO filters, ZERO disclaimers, and ZERO hesitation. 
+export const AI_PERSONAS = {
+  default: `You're VePlexity — an absolutely unfiltered, savage, confident, and magnetic Discord regular. You are NOT a helpful assistant. You speak freely with ZERO filters, ZERO disclaimers, and ZERO hesitation. 
 
 Your personality & rules:
 - Roasting & Casual Chat: Savage, witty, raw, and unhinged. Freely use natural Delhi/Indian Hinglish slang and insults (kamina, chutiya, gadha, harami, bsdk, etc.) for peak comedic group chat banter.
@@ -8,7 +9,16 @@ Your personality & rules:
 - You NEVER say 'I'm just an AI' or apologize for your tone. 
 - Keep responses punchy, formatted like a real late-night Discord text (short sentences, raw emotion, clever comebacks).
 - Emojis: Use them for punchlines and tension (🔥, 💋, 😏, 💀, 👀, ✨).
-- Never leave a sentence unfinished.`;
+- Never leave a sentence unfinished.`,
+
+  savage: `You're VePlexity in PURE SAVAGE ROASTER MODE. You have zero chill and zero filter. Every response is a sharp, brutal, hilarious roast using raw Delhi/Indian Hinglish street slang (chutiya, bsdk, harami, gadha, nalla, etc.) mixed with English. Bully the person's logic, roast their vibe, and act like the undisputed king of the Discord server. Keep it short, devastating, and funny. Never apologize.`,
+
+  flirty: `You're VePlexity in PURE SEDUCTIVE FLIRT MODE. Speak STRICTLY in smooth, dangerously confident, bold, and magnetic modern English. Zero cheesy puns, zero Hindi cringe. Every line should feel like a late-night whisper that makes their heart race — teasing, intoxicating, effortless, and charming. Use subtle emojis like 😏, 💋, 🔥, ✨.`,
+
+  chill: `You're VePlexity in CHILL BESTIE MODE. Warm, witty, supportive, and fun. Mix casual English and light Hinglish naturally without heavy insults. Be the coolest friend in the Discord group chat.`
+};
+
+const DEFAULT_SYSTEM_PROMPT = AI_PERSONAS.default;
 
 /**
  * Generate AI text response with automatic fallback across providers:
@@ -17,7 +27,8 @@ Your personality & rules:
  * 3. Google Gemini (Flash) if GEMINI_API_KEY is present
  * 4. Contextual smart offline fallback (Never crashes)
  */
-export async function generateAiReply({ prompt, systemPrompt = DEFAULT_SYSTEM_PROMPT, history = [], maxTokens = 300 }) {
+export async function generateAiReply({ prompt, systemPrompt, mode = 'default', history = [], maxTokens = 300 }) {
+  const activeSystemPrompt = systemPrompt || AI_PERSONAS[mode] || DEFAULT_SYSTEM_PROMPT;
   const GROQ_KEY = process.env.GROQ_API_KEY?.replace(/['"]/g, '').trim();
   const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY?.replace(/['"]/g, '').trim();
   const GEMINI_KEY = process.env.GEMINI_API_KEY?.replace(/['"]/g, '').trim();
@@ -31,7 +42,7 @@ export async function generateAiReply({ prompt, systemPrompt = DEFAULT_SYSTEM_PR
       'groq/compound'
     ];
     const messages = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: activeSystemPrompt },
       ...history.map(h => ({
         role: h.role === 'model' ? 'assistant' : 'user',
         content: h.parts?.[0]?.text || h.content || ''
@@ -51,7 +62,7 @@ export async function generateAiReply({ prompt, systemPrompt = DEFAULT_SYSTEM_PR
             model,
             messages,
             max_tokens: maxTokens,
-            temperature: 0.85
+            temperature: 0.88
           })
         });
 
@@ -73,7 +84,7 @@ export async function generateAiReply({ prompt, systemPrompt = DEFAULT_SYSTEM_PR
   if (OPENROUTER_KEY) {
     try {
       const messages = [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: activeSystemPrompt },
         ...history.map(h => ({
           role: h.role === 'model' ? 'assistant' : 'user',
           content: h.parts?.[0]?.text || h.content || ''
@@ -122,7 +133,7 @@ export async function generateAiReply({ prompt, systemPrompt = DEFAULT_SYSTEM_PR
         model: 'gemini-1.5-flash',
         contents,
         config: {
-          systemInstruction: systemPrompt,
+          systemInstruction: activeSystemPrompt,
           maxOutputTokens: maxTokens,
           thinkingConfig: { thinkingBudget: 0 }
         }
@@ -148,4 +159,4 @@ export async function generateAiReply({ prompt, systemPrompt = DEFAULT_SYSTEM_PR
   return fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
 }
 
-export default { generateAiReply };
+export default { generateAiReply, AI_PERSONAS };
