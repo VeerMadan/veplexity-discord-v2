@@ -7,7 +7,8 @@ import {
   DARE_CHALLENGES,
   FUN_FACTS,
   WYR_PROMPTS,
-  AFFIRMATIONS
+  AFFIRMATIONS,
+  FUN_GIFS
 } from '../../config/constants.js';
 import { buildEmbed } from '../../utils/embeds.js';
 import db from '../../services/database.js';
@@ -187,6 +188,7 @@ export const eightball = {
     const colorMap = { positive: 0x2ecc71, neutral: 0xf1c40f, negative: 0xe74c3c };
     const emojiMap = { positive: '🟢', neutral: '🟡', negative: '🔴' };
 
+    const gif = FUN_GIFS.eightball[Math.floor(Math.random() * FUN_GIFS.eightball.length)];
     const embed = new EmbedBuilder()
       .setColor(colorMap[pick.type])
       .setTitle('🔮 The Mystic 8-Ball Has Spoken')
@@ -194,6 +196,7 @@ export const eightball = {
         { name: '❓ Question Asked', value: `*"${question}"*` },
         { name: `${emojiMap[pick.type]} Cosmic Verdict`, value: `**${pick.text}**` }
       )
+      .setImage(gif)
       .setFooter({ text: `Consulted by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() })
       .setTimestamp();
 
@@ -208,11 +211,13 @@ export const coinflip = {
     const isHeads = Math.random() < 0.5;
     const result = isHeads ? 'HEADS' : 'TAILS';
     const emoji = isHeads ? '👑' : '🦅';
+    const gif = FUN_GIFS.coinflip[Math.floor(Math.random() * FUN_GIFS.coinflip.length)];
 
     const embed = new EmbedBuilder()
       .setColor(0xf1c40f)
       .setTitle('🪙 Coin Toss Result')
       .setDescription(`The golden coin flipped through the air and landed on...\n\n# ${emoji} **${result}!**`)
+      .setImage(gif)
       .setFooter({ text: `Flipped by ${interaction.user.username}` })
       .setTimestamp();
 
@@ -232,12 +237,14 @@ export const roll = {
     const result = Math.floor(Math.random() * sides) + 1;
     const d6Emojis = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' };
     const diceIcon = (sides === 6 && d6Emojis[result]) ? d6Emojis[result] : '🎲';
+    const gif = FUN_GIFS.roll[Math.floor(Math.random() * FUN_GIFS.roll.length)];
 
     const embed = new EmbedBuilder()
       .setColor(0x3498db)
       .setTitle(`${diceIcon} Dice Roll Result`)
       .setDescription(`Rolling a **d${sides}**...\n\n# **You rolled a ${result}!**`)
       .addFields({ name: '📊 Range', value: `1 - ${sides}`, inline: true })
+      .setImage(gif)
       .setFooter({ text: `Rolled by ${interaction.user.username}` })
       .setTimestamp();
 
@@ -266,6 +273,7 @@ export const rps = {
     const choices = ['rock', 'paper', 'scissors'];
     const botChoice = choices[Math.floor(Math.random() * 3)];
     const emoji = { rock: '🪨 Rock', paper: '📄 Paper', scissors: '✂️ Scissors' };
+    const gif = FUN_GIFS.rps[Math.floor(Math.random() * FUN_GIFS.rps.length)];
 
     let outcome, color;
     if (choice === botChoice) {
@@ -291,6 +299,7 @@ export const rps = {
         { name: '🤖 Bot Pick', value: emoji[botChoice], inline: true },
         { name: '🏆 Verdict', value: outcome }
       )
+      .setImage(gif)
       .setFooter({ text: `Played with ${interaction.user.username}` })
       .setTimestamp();
 
@@ -332,11 +341,15 @@ export const ship = {
       titleEmoji = '🖤';
     }
 
+    const gifList = percent >= 50 ? FUN_GIFS.ship.high : FUN_GIFS.ship.low;
+    const gif = gifList[Math.floor(Math.random() * gifList.length)];
+
     const embed = new EmbedBuilder()
       .setColor(0xff69b4)
       .setTitle(`${titleEmoji} Love Compatibility Calculator`)
       .setDescription(`### <@${user1.id}> × <@${user2.id}>\n\n**Match Meter:** \`[${percent}%]\`\n${bar}\n\n${verdict}`)
       .setThumbnail(user2.displayAvatarURL())
+      .setImage(gif)
       .setFooter({ text: `Shipped by ${interaction.user.username}` })
       .setTimestamp();
 
@@ -354,7 +367,11 @@ export const roast = {
       prompt: `Write a short, hilarious, savage yet PG-13 playful roast (1-2 sentences) aimed at someone named ${target.username}. Make it punchy and witty without being hateful.`,
       maxTokens: 200
     });
-    return interaction.editReply(`🔥 <@${target.id}>: **${roastText}**`);
+    const gif = FUN_GIFS.roast[Math.floor(Math.random() * FUN_GIFS.roast.length)];
+    const embed = new EmbedBuilder()
+      .setColor(0xff4500)
+      .setImage(gif);
+    return interaction.editReply({ content: `🔥 <@${target.id}>: **${roastText}**`, embeds: [embed] });
   }
 };
 
@@ -368,7 +385,11 @@ export const compliment = {
       prompt: `Write a warm, creative, genuinely uplifting compliment (1-2 sentences) for someone named ${target.username}. Make them smile!`,
       maxTokens: 200
     });
-    return interaction.editReply(`💐 <@${target.id}>: **${complimentText}**`);
+    const gif = FUN_GIFS.compliment[Math.floor(Math.random() * FUN_GIFS.compliment.length)];
+    const embed = new EmbedBuilder()
+      .setColor(0xffb6c1)
+      .setImage(gif);
+    return interaction.editReply({ content: `💐 <@${target.id}>: **${complimentText}**`, embeds: [embed] });
   }
 };
 
@@ -528,7 +549,15 @@ export const truth = {
   description: 'Get a spicy or thought-provoking Truth question',
   async execute(interaction) {
     const question = TRUTH_QUESTIONS[Math.floor(Math.random() * TRUTH_QUESTIONS.length)];
-    return interaction.editReply(`🤫 **Truth Challenge for <@${interaction.user.id}>:**\n> "${question}"`);
+    const gif = FUN_GIFS.truth[Math.floor(Math.random() * FUN_GIFS.truth.length)];
+    const embed = new EmbedBuilder()
+      .setColor(0x9b59b6)
+      .setTitle('🤫 Truth Challenge')
+      .setDescription(`### <@${interaction.user.id}>:\n> *"${question}"*`)
+      .setImage(gif)
+      .setFooter({ text: 'Answer truthfully in chat!' })
+      .setTimestamp();
+    return interaction.editReply({ embeds: [embed] });
   }
 };
 
@@ -537,7 +566,15 @@ export const dare = {
   description: 'Get a bold, hilarious Dare challenge to complete',
   async execute(interaction) {
     const challenge = DARE_CHALLENGES[Math.floor(Math.random() * DARE_CHALLENGES.length)];
-    return interaction.editReply(`⚡ **Dare Challenge for <@${interaction.user.id}>:**\n> "${challenge}"`);
+    const gif = FUN_GIFS.dare[Math.floor(Math.random() * FUN_GIFS.dare.length)];
+    const embed = new EmbedBuilder()
+      .setColor(0xe74c3c)
+      .setTitle('⚡ Dare Challenge')
+      .setDescription(`### <@${interaction.user.id}>:\n> *"${challenge}"*`)
+      .setImage(gif)
+      .setFooter({ text: 'No backing down!' })
+      .setTimestamp();
+    return interaction.editReply({ embeds: [embed] });
   }
 };
 
@@ -713,12 +750,14 @@ export const howgay = {
     const barLength = 10;
     const filled = Math.round((percent / 100) * barLength);
     const bar = '🏳️‍🌈'.repeat(filled) + '⬛'.repeat(barLength - filled);
+    const gif = FUN_GIFS.howgay[Math.floor(Math.random() * FUN_GIFS.howgay.length)];
 
     const embed = new EmbedBuilder()
       .setColor(0xff69b4)
       .setTitle('🌈 Gay-O-Meter Measurement')
       .setDescription(`### <@${target.id}> is **${percent}%** gay!\n\n${bar}`)
       .setThumbnail(target.displayAvatarURL())
+      .setImage(gif)
       .setFooter({ text: '100% scientifically accurate • Just for fun' })
       .setTimestamp();
 
@@ -737,6 +776,7 @@ export const simp = {
     const barLength = 10;
     const filled = Math.round((percent / 100) * barLength);
     const bar = '💖'.repeat(filled) + '🖤'.repeat(barLength - filled);
+    const gif = FUN_GIFS.simp[Math.floor(Math.random() * FUN_GIFS.simp.length)];
 
     let verdict;
     if (percent >= 90) verdict = "👑 **Supreme Simp Overlord.** Would donate their entire life savings in 0.2s.";
@@ -750,6 +790,7 @@ export const simp = {
       .setTitle('🥺 Simp-O-Meter')
       .setDescription(`### <@${target.id}> is **${percent}%** simp!\n\n${bar}\n\n${verdict}`)
       .setThumbnail(target.displayAvatarURL())
+      .setImage(gif)
       .setFooter({ text: 'Certified Simp Measurement' })
       .setTimestamp();
 
@@ -774,12 +815,14 @@ export const vibe = {
 
     const pick = vibes[Math.floor(Math.random() * vibes.length)];
     const score = Math.floor(Math.random() * 41) + 60; // 60-100%
+    const gif = FUN_GIFS.vibe[Math.floor(Math.random() * FUN_GIFS.vibe.length)];
 
     const embed = new EmbedBuilder()
       .setColor(pick.color)
       .setTitle('🔮 Vibe Check Results')
       .setDescription(`### <@${target.id}>'s Current Vibe:\n\n# **${pick.name}**\n\n> *"${pick.desc}"*\n\n**Vibe Rating:** \`${score}%\` match`)
       .setThumbnail(target.displayAvatarURL())
+      .setImage(gif)
       .setFooter({ text: `Checked by ${interaction.user.username}` })
       .setTimestamp();
 
@@ -794,6 +837,7 @@ export const ratio = {
   async execute(interaction) {
     const target = interaction.options.getUser('user');
     const isSuccess = Math.random() < 0.65; // 65% success rate
+    const gif = FUN_GIFS.ratio[Math.floor(Math.random() * FUN_GIFS.ratio.length)];
 
     const embed = new EmbedBuilder()
       .setColor(isSuccess ? 0x2ecc71 : 0xe74c3c)
@@ -802,6 +846,7 @@ export const ratio = {
         ? `🔥 <@${interaction.user.id}> has successfully **RATIOED** <@${target.id}> into oblivion!\n\n> *L + Ratio + No Maidens + Touch Grass + Fell Off 💀*`
         : `🤡 <@${interaction.user.id}> attempted to ratio <@${target.id}> and failed miserably!\n\n> *You got counter-ratioed! Take the L. 📉*`)
       .setThumbnail(target.displayAvatarURL())
+      .setImage(gif)
       .setFooter({ text: 'Certified Discord Ratio Authority' })
       .setTimestamp();
 
@@ -825,11 +870,14 @@ export const iq = {
     else if (score >= 60) verdict = "🥔 **Potato Battery Level.** Occasionally forgets how to breathe.";
     else verdict = "🪨 **Room Temperature IQ.** Solid rock energy.";
 
+    const gif = score >= 110 ? FUN_GIFS.iq.high : FUN_GIFS.iq.low;
+
     const embed = new EmbedBuilder()
       .setColor(score >= 110 ? 0x3498db : score >= 80 ? 0xf1c40f : 0xe74c3c)
       .setTitle('🧠 IQ Test Assessment')
       .setDescription(`### <@${target.id}>'s IQ Score:\n\n# **${score} IQ**\n\n${verdict}`)
       .setThumbnail(target.displayAvatarURL())
+      .setImage(gif)
       .setFooter({ text: '100% totally legitimate scientific IQ assessment' })
       .setTimestamp();
 
@@ -842,7 +890,14 @@ export const affirmation = {
   description: 'Receive a boost of daily positive motivation and affirmation',
   async execute(interaction) {
     const quote = AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)];
-    return interaction.editReply(`✨ **Daily Affirmation for <@${interaction.user.id}>:**\n> ${quote}`);
+    const gif = FUN_GIFS.affirmation[Math.floor(Math.random() * FUN_GIFS.affirmation.length)];
+    const embed = new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setImage(gif);
+    return interaction.editReply({
+      content: `✨ **Daily Affirmation for <@${interaction.user.id}>:**\n> ${quote}`,
+      embeds: [embed]
+    });
   }
 };
 
@@ -856,7 +911,14 @@ export const flirt = {
       prompt: `Write a sleek, dangerously charming, bold, and seductive flirty line (1-2 short sentences) directed at ${target.username}. STRICTLY IN MODERN ENGLISH. NO cheesy metaphors or cringe jokes. Make it confident, teasing, magnetic, and genuinely smooth.`,
       maxTokens: 200
     });
-    return interaction.editReply(`💋 **<@${interaction.user.id}> whispers to <@${target.id}>:**\n> *"${flirtText}"*`);
+    const gif = FUN_GIFS.flirt[Math.floor(Math.random() * FUN_GIFS.flirt.length)];
+    const embed = new EmbedBuilder()
+      .setColor(0xff2a6d)
+      .setImage(gif);
+    return interaction.editReply({
+      content: `💋 **<@${interaction.user.id}> whispers to <@${target.id}>:**\n> *"${flirtText}"*`,
+      embeds: [embed]
+    });
   }
 };
 
@@ -867,11 +929,16 @@ export const pickup = {
   async execute(interaction) {
     const target = interaction.options.getUser('user');
     const line = PICKUP_LINES[Math.floor(Math.random() * PICKUP_LINES.length)];
+    const gif = FUN_GIFS.pickup[Math.floor(Math.random() * FUN_GIFS.pickup.length)];
+    const embed = new EmbedBuilder()
+      .setColor(0xff69b4)
+      .setImage(gif);
 
-    if (target) {
-      return interaction.editReply(`💘 **<@${interaction.user.id}> whispers to <@${target.id}>:**\n> *"${line}"*`);
-    }
-    return interaction.editReply(`💘 *"${line}"*`);
+    const text = target
+      ? `💘 **<@${interaction.user.id}> whispers to <@${target.id}>:**\n> *"${line}"*`
+      : `💘 *"${line}"*`;
+
+    return interaction.editReply({ content: text, embeds: [embed] });
   }
 };
 

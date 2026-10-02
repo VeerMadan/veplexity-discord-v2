@@ -384,3 +384,84 @@ export const AFFIRMATIONS = [
   "🌊 Go with the flow of life and trust that things will align for you.",
   "⭐ You matter, your presence makes a difference, and you are valued!"
 ];
+
+export const FUN_GIFS = {
+  roast: [
+    'https://media.giphy.com/media/ro08ZmQ1MeqZypzgDN/giphy.gif', // Emotional damage
+    'https://media.giphy.com/media/cF7QqO5DYdft6/giphy.gif', // Supa hot fire
+    'https://media.giphy.com/media/AiqLB6aghXEDm/giphy.gif'  // Anime burn explosion
+  ],
+  compliment: [
+    'https://media.giphy.com/media/uw0KqTWZSm8gg/giphy.gif', // Anime heart sparkle
+    'https://media.giphy.com/media/M90mJvfWfd5mbUuULX/giphy.gif', // Blushing sweet
+    'https://media.giphy.com/media/11rI9SX0U2Z2Bl/giphy.gif'   // Cute anime sparkles
+  ],
+  flirt: [
+    'https://media.giphy.com/media/B9rJsTkqAglb2/giphy.gif', // Seductive anime wink
+    'https://media.giphy.com/media/y0NFayaBeiWEU/giphy.gif', // Smirk charm
+    'https://media.giphy.com/media/DURbX7oesHiaA/giphy.gif'  // Confident charmer
+  ],
+  pickup: [
+    'https://media.giphy.com/media/OpfkuToK5gvBQ8Kj3a/giphy.gif', // Anime rose
+    'https://media.giphy.com/media/11rI9SX0U2Z2Bl/giphy.gif'
+  ],
+  eightball: [
+    'https://media.giphy.com/media/26xBI73gWquCBBCDe/giphy.gif', // Mystic crystal ball
+    'https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif'  // Magic prediction
+  ],
+  coinflip: [
+    'https://media.giphy.com/media/26ufcVAp3AiJJsrIs/giphy.gif', // Flipping coin
+    'https://media.giphy.com/media/3oriO13KTkzPwTykp2/giphy.gif'
+  ],
+  roll: [
+    'https://media.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.gif', // Dice roll
+    'https://media.giphy.com/media/l2Sqd88e5j9VDeC0U/giphy.gif'
+  ],
+  rps: [
+    'https://media.giphy.com/media/10hO3rDNqqJ2y4/giphy.gif', // Hunter x Hunter RPS
+    'https://media.giphy.com/media/3ohhwkIX21e1h25zpe/giphy.gif'
+  ],
+  ship: {
+    high: [
+      'https://media.giphy.com/media/G3va31oEEnIkM/giphy.gif', // Anime sweet love
+      'https://media.giphy.com/media/11rI9SX0U2Z2Bl/giphy.gif'
+    ],
+    low: [
+      'https://media.giphy.com/media/AiqLB6aghXEDm/giphy.gif', // Explosion
+      'https://media.giphy.com/media/ro08ZmQ1MeqZypzgDN/giphy.gif'
+    ]
+  },
+  truth: [
+    'https://media.giphy.com/media/a5viI92PAF89q/giphy.gif', // Thinking detective
+    'https://media.giphy.com/media/lKXEBR8m1jWso/giphy.gif'  // Sweating anime
+  ],
+  dare: [
+    'https://media.giphy.com/media/26xBFT14ap4Afgusg/giphy.gif', // Wild dare
+    'https://media.giphy.com/media/3o7TKTDnUxE0g2fSE8/giphy.gif'
+  ],
+  howgay: [
+    'https://media.giphy.com/media/BpnkuY1i2rBpm/giphy.gif', // Rainbow sparkles
+    'https://media.giphy.com/media/11rI9SX0U2Z2Bl/giphy.gif'
+  ],
+  simp: [
+    'https://media.giphy.com/media/3o7ZeHq5mbU59OWTx6/giphy.gif', // Heart eyes simping
+    'https://media.giphy.com/media/9G0AdE09QIvgmXXq5l/giphy.gif'
+  ],
+  vibe: [
+    'https://media.giphy.com/media/jpbnoe3UIa8TU8LM13/giphy.gif', // Cat vibing
+    'https://media.giphy.com/media/M90mJvfWfd5mbUuULX/giphy.gif'
+  ],
+  ratio: [
+    'https://media.giphy.com/media/ro08ZmQ1MeqZypzgDN/giphy.gif', // Emotional damage
+    'https://media.giphy.com/media/AiqLB6aghXEDm/giphy.gif'
+  ],
+  iq: {
+    high: 'https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif', // Galaxy brain
+    low: 'https://media.giphy.com/media/BBkKEBJ30klWZ2/giphy.gif'    // Monkey brain
+  },
+  affirmation: [
+    'https://media.giphy.com/media/3o6Zt6KHxJTbXCnSvu/giphy.gif', // Sunrise peace
+    'https://media.giphy.com/media/T3Vvyi6SH14PO/giphy.gif'
+  ]
+};
+
