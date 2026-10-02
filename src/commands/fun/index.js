@@ -13,6 +13,8 @@ import {
 import { buildEmbed } from '../../utils/embeds.js';
 import db from '../../services/database.js';
 import { generateAiReply } from '../../services/aiService.js';
+import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
+import musicManager from '../../services/music/MusicManager.js';
 
 const ACTION_PAST_VERBS = {
   bite: 'bit',
@@ -1161,5 +1163,160 @@ export const rpsduel = {
         interaction.editReply({ content: '⏱️ Duel timed out — someone didn\'t pick in time.', components: [] }).catch(() => null);
       }
     });
+  }
+};
+
+export const filter = {
+  name: 'filter',
+  description: 'Apply meme & visual filters to a user profile avatar or yours',
+  options: [
+    {
+      name: 'type',
+      description: 'The filter effect to apply',
+      type: 3,
+      required: true,
+      choices: [
+        { name: '🔒 Jail', value: 'jail' },
+        { name: '💀 Wasted (GTA)', value: 'wasted' },
+        { name: '💢 Triggered', value: 'triggered' },
+        { name: '🔄 Invert Colors', value: 'invert' },
+        { name: '👾 Pixelate', value: 'pixelate' },
+        { name: '🎞️ Grayscale', value: 'greyscale' },
+        { name: '🌫️ Blur', value: 'blur' },
+        { name: '📜 Sepia', value: 'sepia' }
+      ]
+    },
+    {
+      name: 'user',
+      description: 'The user whose avatar to filter (defaults to you)',
+      type: 6,
+      required: false
+    }
+  ],
+  async execute(interaction) {
+    const filterType = interaction.options.getString('type');
+    const targetUser = interaction.options.getUser('user') || interaction.user;
+    const avatarUrl = targetUser.displayAvatarURL({ extension: 'png', size: 512, forceStatic: true });
+
+    let apiUrl;
+    if (['jail', 'wasted', 'triggered'].includes(filterType)) {
+      apiUrl = `https://some-random-api.com/canvas/overlay/${filterType}?avatar=${encodeURIComponent(avatarUrl)}`;
+    } else {
+      apiUrl = `https://some-random-api.com/canvas/filter/${filterType}?avatar=${encodeURIComponent(avatarUrl)}`;
+    }
+
+    const titles = {
+      jail: `🚨 Put ${targetUser.username} in jail!`,
+      wasted: `💀 ${targetUser.username} got WASTED!`,
+      triggered: `💢 ${targetUser.username} is heavily TRIGGERED!`,
+      invert: `🔄 ${targetUser.username}'s Inverted Reality`,
+      pixelate: `👾 8-Bit Pixelated ${targetUser.username}`,
+      greyscale: `🎞️ Noir Vintage ${targetUser.username}`,
+      blur: `🌫️ Blurred Vision of ${targetUser.username}`,
+      sepia: `📜 Antique Sepia ${targetUser.username}`
+    };
+
+    const embed = new EmbedBuilder()
+      .setColor(0xff2a6d)
+      .setTitle(titles[filterType] || `✨ Filter Applied: ${filterType}`)
+      .setImage(apiUrl)
+      .setFooter({ text: `Requested by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+  }
+};
+
+export const sfx = {
+  name: 'sfx',
+  description: 'Play an instant meme sound effect directly in your voice channel',
+  options: [
+    {
+      name: 'sound',
+      description: 'The sound effect to blast',
+      type: 3,
+      required: true,
+      choices: [
+        { name: '💥 Vine Boom', value: 'vine_boom' },
+        { name: '💔 Emotional Damage', value: 'emotional_damage' },
+        { name: '🚨 FBI Open Up', value: 'fbi_open_up' },
+        { name: '🗿 Bruh Moment', value: 'bruh' },
+        { name: '🔔 Undertaker Gong', value: 'undertaker_bell' },
+        { name: '✨ Anime Wow', value: 'anime_wow' },
+        { name: '😏 Rizz Chord', value: 'rizz_effect' },
+        { name: '🔊 Metal Pipe Clang', value: 'metal_pipe' }
+      ]
+    }
+  ],
+  async execute(interaction) {
+    const soundKey = interaction.options.getString('sound');
+    const member = interaction.member;
+    const voiceChannel = member.voice?.channel;
+
+    if (!voiceChannel) {
+      return interaction.editReply({ content: '❌ You must be in a voice channel to blast a sound effect!' });
+    }
+
+    const sfxMap = {
+      vine_boom: { name: 'Vine Boom 💥', url: 'https://raw.githubusercontent.com/PareekshithPalat/IDE-Error-Soundboard/main/sounds/vine-boom.mp3' },
+      emotional_damage: { name: 'Emotional Damage 💔', url: 'https://raw.githubusercontent.com/PareekshithPalat/IDE-Error-Soundboard/main/sounds/emotional-damage.mp3' },
+      fbi_open_up: { name: 'FBI Open Up 🚨', url: 'https://raw.githubusercontent.com/PareekshithPalat/IDE-Error-Soundboard/main/sounds/fbi.mp3' },
+      bruh: { name: 'Bruh 🗿', url: 'https://raw.githubusercontent.com/PareekshithPalat/IDE-Error-Soundboard/main/sounds/bruh.mp3' },
+      undertaker_bell: { name: 'Undertaker Bell 🔔', url: 'https://raw.githubusercontent.com/PareekshithPalat/IDE-Error-Soundboard/main/sounds/undertaker-bell.mp3' },
+      anime_wow: { name: 'Anime Wow ✨', url: 'https://raw.githubusercontent.com/PareekshithPalat/IDE-Error-Soundboard/main/sounds/anime-wow.mp3' },
+      rizz_effect: { name: 'Rizz Chord 😏', url: 'https://raw.githubusercontent.com/PareekshithPalat/IDE-Error-Soundboard/main/sounds/rizz-effect.mp3' },
+      metal_pipe: { name: 'Metal Pipe Clang 🔊', url: 'https://raw.githubusercontent.com/PareekshithPalat/IDE-Error-Soundboard/main/sounds/metal-pipe-clang.mp3' }
+    };
+
+    const sfxData = sfxMap[soundKey];
+    if (!sfxData) return interaction.editReply({ content: '❌ Unknown sound effect selected.' });
+
+    const queue = musicManager.getQueue(interaction.guildId);
+    if (queue && queue.isPlaying) {
+      return interaction.editReply({ content: '⚠️ The bot is currently playing music! Stop or pause music before playing SFX.' });
+    }
+
+    try {
+      const connection = joinVoiceChannel({
+        channelId: voiceChannel.id,
+        guildId: interaction.guildId,
+        adapterCreator: interaction.guild.voiceAdapterCreator
+      });
+
+      const player = createAudioPlayer();
+      const resource = createAudioResource(sfxData.url);
+
+      player.play(resource);
+      connection.subscribe(player);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x3498db)
+        .setTitle('🔊 Sound Effect Played')
+        .setDescription(`Blasted **${sfxData.name}** in <#${voiceChannel.id}>!`)
+        .setFooter({ text: `Requested by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
+
+      await interaction.editReply({ embeds: [embed] });
+
+      const cleanup = () => {
+        try {
+          player.stop();
+          connection.destroy();
+        } catch (e) {}
+      };
+
+      player.once(AudioPlayerStatus.Idle, () => {
+        setTimeout(cleanup, 800);
+      });
+
+      player.once('error', (err) => {
+        console.error('[SFX Player Error]:', err);
+        cleanup();
+      });
+
+      setTimeout(cleanup, 12000);
+    } catch (err) {
+      console.error('[SFX Error]:', err);
+      return interaction.editReply({ content: `❌ Failed to play sound effect: ${err.message}` });
+    }
   }
 };

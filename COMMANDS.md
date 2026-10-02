@@ -1,6 +1,6 @@
-# 🤖 VePlexity Bot — Full 100 Slash Commands Catalog
+# 🤖 VePlexity Bot — Full 99 Slash Commands Catalog
 
-> **Total Commands:** `100 / 100` (Maximum Discord Guild Capacity)  
+> **Total Commands:** `99 / 100` (Strictly under Discord Guild Limit)  
 > **Prefix:** `/` (Discord Slash Commands)  
 > **Bot Client ID:** `1470533218376613908`
 
@@ -27,11 +27,15 @@
 
 ---
 
-## 🕵️ Caught in 4K, AI Studio, Giveaways & Utilities (14 Commands)
-*Surveillance, anonymous confessions, free AI image generation, AI mood switching, and server tools.*
+## 🚀 Killer Features, Caught in 4K & Utilities (17 Commands)
+*Auto Temp VCs, Starboard Hall of Fame, Counting Game, Birthday Tracker, Confessions, AI image gen & diagnostics.*
 
 | Command | Arguments | Description |
 | :--- | :--- | :--- |
+| `/tempvc` | `<setup/rename/lock/unlock/limit>` | **Auto Join-to-Create voice hub!** Setup auto-rooms or manage your custom voice room (rename, lock, member limits). |
+| `/starboard` | `[channel]` `[stars]` `[disable]` | **Hall of Fame!** Pins community-voted messages receiving ⭐ reactions to a designated showcase channel. |
+| `/counting` | `[channel]` `[reset]` | **Interactive Counting Game!** Designate a streak counting channel with high-score tracking and anti-double-count rules. |
+| `/birthday` | `<set/view/upcoming/channel>` | **Birthday Celebrations!** Register your birth date (`DD-MM`), view birthdays, and get automated server announcements. |
 | `/snipe` | `[type]` | **Caught in 4K!** Expose the last deleted message (`deleted`) or before/after edited message (`edited`). |
 | `/confess` | `<secret>` | Post a **100% anonymous confession** in the channel with zero trace of who sent it. |
 | `/afk` | `[reason]` | Set an AFK status—auto-replies when someone pings you and auto-clears when you return. |
@@ -44,18 +48,17 @@
 | `/roleinfo` | `<role>` | Shows role color, member count, hierarchy position, and creation date. |
 | `/userinfo` | `<user>` | Displays account creation date, server join date, avatar, and roles. |
 | `/avatar` | `[user]` | Displays a user's full-resolution 1024px avatar. |
-| `/rate` | `<thing>` | Rates anything on a 0–10 scale with a visual progress bar. |
 | `/poll` | `<question>` | Creates a formatted poll embed with automatic 👍 and 👎 reactions. |
 
 ---
 
-## 🛡️ Moderation & Server Administration (30 Commands)
+## 🛡️ Moderation & Server Administration (23 Commands)
 *Restricted to Staff Roles: Owner, Administrator, Senior Moderator, Moderator, Trial Moderator.*
 
 | Command | Arguments | Description |
 | :--- | :--- | :--- |
 | `/warn` | `<user>` `<reason>` | Issues an official warning (Auto-escalates: 3 = 10m timeout, 4 = 1h, 5 = 12h, 6 = kick, 7 = ban). |
-| `/pvc_warn` | `<user>` `<rule>` | Issues a warning for Private VC rule violations (`PVC1`–`PVC5`). |
+| `/pvc` | `<action: warn/ban/restore>` `<user>` `[rule]` | Manage Private Voice Channel rules: warn violations, revoke PVC access, or restore access. |
 | `/kick` | `<user>` `[reason]` | Kicks a member from the server. |
 | `/ban` | `<user>` `[reason]` | Permanently bans a member from the server. |
 | `/unban` | `<user_id>` | Unbans a user by their Discord User ID. |
@@ -68,22 +71,15 @@
 | `/moveall` | `<from>` `<to>` | Moves all connected members from one voice channel to another. |
 | `/nuke` | `[reason]` | Completely wipes and clones the current channel for a fresh reset. |
 | `/announce` | `<channel>` `<title>` `<message>` `[color]` `[ping]` | Sends a formatted announcement embed with optional ping (`@everyone`/`@here`). |
-| `/pvc_ban` | `<user>` `<rule>` | Revokes Private VC access role (`1469376368067477689`). |
-| `/pvc_restore` | `<user>` | Restores Private VC access role to a user. |
 | `/warnings` | `<user>` | Displays total general warnings and PVC warnings count for a user. |
 | `/clearwarnings`| `<user>` | Clears all warnings for a user in the database. |
-| `/cases` | `<user>` | Lists recent moderation case history for a user. |
-| `/case` | `<id>` | Fetches and displays full breakdown for a specific case number. |
+| `/cases` | `[user]` `[id]` | Views moderation case history for a user or fetches details for a specific case ID. |
 | `/modlogs` | `<channel>` | Sets the designated audit logs channel for all moderation actions. |
-| `/note` | `<user>` `<text>` | Adds a private staff note attached to a user's record. |
-| `/notes` | `<user>` | Displays all private staff notes for a user. |
+| `/notes` | `<user>` `[add]` | Views staff notes or appends a new note to a user's moderation record. |
 | `/nickname` | `<user>` `[name]` | Changes or resets a member's server nickname. |
-| `/lockdown` | *None* | Locks down all text channels across the entire server. |
-| `/unlockdown` | *None* | Unlocks all text channels across the entire server. |
-| `/masskick` | `<users>` `[reason]` | Kicks multiple comma-separated user IDs simultaneously. |
-| `/massban` | `<users>` `[reason]` | Bans multiple comma-separated user IDs simultaneously. |
-| `/muteall` | *None* | Server-mutes all non-bot members in your active voice channel. |
-| `/unmuteall` | *None* | Server-unmutes all members in your active voice channel. |
+| `/lockdown` | `[action: lock/unlock]` | Locks or unlocks all text channels across the entire server in emergency. |
+| `/massmod` | `<action: kick/ban>` `<users>` `[reason]` | Kicks or bans multiple comma-separated user IDs simultaneously. |
+| `/muteall` | `<action: mute/unmute>` | Server-mutes or unmutes all members in your active voice channel. |
 
 ---
 
@@ -111,11 +107,13 @@
 
 ---
 
-## 🎮 Fun, Social & Multiplayer Games (27 Commands)
-*Interactive games, AI roasts, and server engagement.*
+## 🎮 Fun, Social, SFX & Meme Image Filters (30 Commands)
+*Voice meme soundboard, image manipulation canvas, interactive games, AI roasts, and server engagement.*
 
 | Command | Arguments | Description |
 | :--- | :--- | :--- |
+| `/filter` | `<type>` `[user]` | **Meme Canvas Filters!** Apply `jail`, `wasted`, `triggered`, `invert`, `pixelate`, `greyscale`, `blur`, or `sepia` to any avatar. |
+| `/sfx` | `<sound>` | **Voice Meme Soundboard!** Instantly blast `vine_boom`, `emotional_damage`, `fbi_open_up`, `bruh`, `undertaker_bell`, `anime_wow`, `rizz_effect`, or `metal_pipe` into your VC. |
 | `/truth` | *None* | Get a spicy or thought-provoking Truth question. |
 | `/dare` | *None* | Get a bold Dare challenge to complete in the server. |
 | `/trivia` | *None* | Interactive trivia challenge with **4 clickable buttons** and a 20s timer. |
@@ -143,3 +141,4 @@
 | `/compliment` | `<user>` | Generate a warm, AI-crafted compliment for a member. |
 | `/fact` | *None* | Get a mind-blowing trivia fact from live API + curated backup. |
 | `/emojify` | `<text>` | Convert plain text into bold regional indicator emojis. |
+| `/rate` | `<thing>` | Rates anything on a 0–10 scale with a visual progress bar. |

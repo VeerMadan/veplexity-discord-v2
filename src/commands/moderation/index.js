@@ -69,16 +69,27 @@ export const warn = {
   }
 };
 
-export const pvc_warn = {
-  name: 'pvc_warn',
-  description: 'Warn user for PVC violation',
+export const pvc = {
+  name: 'pvc',
+  description: 'Manage Private Voice Channel access (ban, restore, warn)',
   options: [
-    { name: 'user', type: 6, required: true, description: 'User' },
+    {
+      name: 'action',
+      description: 'Action to perform',
+      type: 3,
+      required: true,
+      choices: [
+        { name: '⚠️ Issue PVC Warning', value: 'warn' },
+        { name: '🚫 Revoke / Ban PVC Access', value: 'ban' },
+        { name: '🔓 Restore PVC Access', value: 'restore' }
+      ]
+    },
+    { name: 'user', type: 6, required: true, description: 'Target user' },
     {
       name: 'rule',
       type: 3,
-      required: true,
-      description: 'Rule violated',
+      required: false,
+      description: 'Rule violated (for ban / warn)',
       choices: [
         { name: 'Joining private VC without permission', value: 'PVC1' },
         { name: 'Not leaving when asked', value: 'PVC2' },
@@ -89,31 +100,69 @@ export const pvc_warn = {
     }
   ],
   async execute(interaction) {
+    const action = interaction.options.getString('action');
     const user = interaction.options.getUser('user');
     const ruleKey = interaction.options.getString('rule');
-    const reason = PVC_RULES[ruleKey] || 'PVC Violation';
+    const reason = (ruleKey && PVC_RULES[ruleKey]) ? `${ruleKey}: ${PVC_RULES[ruleKey]}` : 'PVC Management Action';
+    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
 
-    const caseId = db.createCase({
-      action: 'pvc_warn',
-      userId: user.id,
-      moderatorId: interaction.user.id,
-      reason,
-      channelId: interaction.channelId,
-      guildId: interaction.guildId
-    });
-
-    const warnData = db.addWarn(user.id, true);
-
-    const embed = buildEmbed('PVC Warning Issued', '⚠️', 0xe67e22, [
-      { name: 'User', value: `<@${user.id}>`, inline: true },
-      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
-      { name: 'Case', value: `#${caseId}`, inline: true },
-      { name: 'Rule', value: `${ruleKey}: ${reason}`, inline: false },
-      { name: 'Total PVC Warnings', value: `${warnData.p}`, inline: true }
-    ]);
-
-    await interaction.editReply({ embeds: [embed] });
-    await sendModLog(interaction.guild, embed);
+    if (action === 'warn') {
+      const caseId = db.createCase({
+        action: 'pvc_warn',
+        userId: user.id,
+        moderatorId: interaction.user.id,
+        reason,
+        channelId: interaction.channelId,
+        guildId: interaction.guildId
+      });
+      const warnData = db.addWarn(user.id, true);
+      const embed = buildEmbed('PVC Warning Issued', '⚠️', 0xe67e22, [
+        { name: 'User', value: `<@${user.id}>`, inline: true },
+        { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+        { name: 'Case', value: `#${caseId}`, inline: true },
+        { name: 'Rule', value: reason, inline: false },
+        { name: 'Total PVC Warnings', value: `${warnData.p}`, inline: true }
+      ]);
+      await interaction.editReply({ embeds: [embed] });
+      await sendModLog(interaction.guild, embed);
+    } else if (action === 'ban') {
+      if (member) await member.roles.remove(PRIVATE_VC_ROLE_IDS).catch(() => null);
+      db.addPvcRevoked(user.id);
+      const caseId = db.createCase({
+        action: 'pvc_ban',
+        userId: user.id,
+        moderatorId: interaction.user.id,
+        reason,
+        channelId: interaction.channelId,
+        guildId: interaction.guildId
+      });
+      const embed = buildEmbed('Private VC Revoked', '🚫', 0xe74c3c, [
+        { name: 'User', value: `<@${user.id}>`, inline: true },
+        { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+        { name: 'Reason', value: reason, inline: false },
+        { name: 'Case', value: `#${caseId}`, inline: true }
+      ]);
+      await interaction.editReply({ embeds: [embed] });
+      await sendModLog(interaction.guild, embed);
+    } else if (action === 'restore') {
+      if (member) await member.roles.add(PRIVATE_VC_ROLE_IDS).catch(() => null);
+      db.removePvcRevoked(user.id);
+      const caseId = db.createCase({
+        action: 'pvc_restore',
+        userId: user.id,
+        moderatorId: interaction.user.id,
+        reason: 'Restored private VC access',
+        channelId: interaction.channelId,
+        guildId: interaction.guildId
+      });
+      const embed = buildEmbed('Private VC Restored', '🔓', 0x2ecc71, [
+        { name: 'User', value: `<@${user.id}>`, inline: true },
+        { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+        { name: 'Case', value: `#${caseId}`, inline: true }
+      ]);
+      await interaction.editReply({ embeds: [embed] });
+      await sendModLog(interaction.guild, embed);
+    }
   }
 };
 
@@ -381,90 +430,6 @@ export const slowmode = {
   }
 };
 
-export const pvc_ban = {
-  name: 'pvc_ban',
-  description: 'Revoke private VC access',
-  options: [
-    { name: 'user', type: 6, required: true, description: 'User' },
-    {
-      name: 'rule',
-      type: 3,
-      required: true,
-      description: 'Rule violated',
-      choices: [
-        { name: 'Joining private VC without permission', value: 'PVC1' },
-        { name: 'Not leaving when asked', value: 'PVC2' },
-        { name: 'Disturbing private conversation', value: 'PVC3' },
-        { name: 'Abusive or offensive language', value: 'PVC4' },
-        { name: 'Recording without consent', value: 'PVC5' }
-      ]
-    }
-  ],
-  async execute(interaction) {
-    const user = interaction.options.getUser('user');
-    const ruleKey = interaction.options.getString('rule');
-    const reason = PVC_RULES[ruleKey] || 'PVC Violation';
-    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
-
-    if (member) {
-      await member.roles.remove(PRIVATE_VC_ROLE_IDS).catch(() => null);
-    }
-    db.addPvcRevoked(user.id);
-
-    const caseId = db.createCase({
-      action: 'pvc_ban',
-      userId: user.id,
-      moderatorId: interaction.user.id,
-      reason,
-      channelId: interaction.channelId,
-      guildId: interaction.guildId
-    });
-
-    const embed = buildEmbed('Private VC Revoked', '🚫', 0xe74c3c, [
-      { name: 'User', value: `<@${user.id}>`, inline: true },
-      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
-      { name: 'Rule', value: `${ruleKey}: ${reason}`, inline: false },
-      { name: 'Case', value: `#${caseId}`, inline: true }
-    ]);
-
-    await interaction.editReply({ embeds: [embed] });
-    await sendModLog(interaction.guild, embed);
-  }
-};
-
-export const pvc_restore = {
-  name: 'pvc_restore',
-  description: 'Restore private VC access',
-  options: [{ name: 'user', type: 6, required: true, description: 'User' }],
-  async execute(interaction) {
-    const user = interaction.options.getUser('user');
-    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
-
-    if (member) {
-      await member.roles.add(PRIVATE_VC_ROLE_IDS).catch(() => null);
-    }
-    db.removePvcRevoked(user.id);
-
-    const caseId = db.createCase({
-      action: 'pvc_restore',
-      userId: user.id,
-      moderatorId: interaction.user.id,
-      reason: 'Restored private VC access',
-      channelId: interaction.channelId,
-      guildId: interaction.guildId
-    });
-
-    const embed = buildEmbed('Private VC Restored', '🔓', 0x2ecc71, [
-      { name: 'User', value: `<@${user.id}>`, inline: true },
-      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
-      { name: 'Case', value: `#${caseId}`, inline: true }
-    ]);
-
-    await interaction.editReply({ embeds: [embed] });
-    await sendModLog(interaction.guild, embed);
-  }
-};
-
 export const warnings = {
   name: 'warnings',
   description: 'Check user warnings',
@@ -513,90 +478,85 @@ export const clearwarnings = {
 
 export const cases = {
   name: 'cases',
-  description: 'View all cases of a user',
-  options: [{ name: 'user', type: 6, required: true, description: 'User' }],
-  async execute(interaction) {
-    const user = interaction.options.getUser('user');
-    const userCases = db.getUserCases(user.id);
-
-    if (userCases.length === 0) {
-      return interaction.editReply({
-        embeds: [buildEmbed('No Cases Found', '🫠', 0x95a5a6, [{ name: 'Status', value: `No records on <@${user.id}>.` }])]
-      });
-    }
-
-    const formatted = userCases.slice(-10).map(c => `**#${c.id}** • \`${c.action.toUpperCase()}\` — ${c.reason} (<t:${Math.floor(new Date(c.timestamp).getTime() / 1000)}:R>)`).join('\n');
-
-    const embed = buildEmbed('User Case History', '📁', 0x3498db, [
-      { name: 'User', value: `<@${user.id}>`, inline: true },
-      { name: 'Total Cases', value: `${userCases.length}`, inline: true },
-      { name: 'Recent Records', value: formatted.slice(0, 1000), inline: false }
-    ]);
-
-    return interaction.editReply({ embeds: [embed] });
-  }
-};
-
-export const caseCmd = {
-  name: 'case',
-  description: 'View specific case details',
-  options: [{ name: 'id', type: 4, required: true, description: 'Case ID' }],
-  async execute(interaction) {
-    const id = interaction.options.getInteger('id');
-    const c = db.getCase(id);
-    if (!c) return interaction.editReply('❌ Case not found.');
-
-    const embed = buildEmbed(`Case #${id}`, '📁', 0x3498db, [
-      { name: 'Action', value: c.action.toUpperCase(), inline: true },
-      { name: 'Target User', value: `<@${c.user}>`, inline: true },
-      { name: 'Moderator', value: `<@${c.moderator}>`, inline: true },
-      { name: 'Channel', value: c.channel ? `<#${c.channel}>` : 'N/A', inline: true },
-      { name: 'Timestamp', value: `<t:${Math.floor(new Date(c.timestamp).getTime() / 1000)}:F>`, inline: true },
-      { name: 'Reason', value: c.reason, inline: false }
-    ]);
-
-    return interaction.editReply({ embeds: [embed] });
-  }
-};
-
-export const note = {
-  name: 'note',
-  description: 'Add a private staff note about a user',
+  description: 'View moderation cases of a user or inspect a specific case by ID',
   options: [
-    { name: 'user', description: 'User', type: 6, required: true },
-    { name: 'text', description: 'Note text', type: 3, required: true }
+    { name: 'user', type: 6, required: false, description: 'View all cases for a user' },
+    { name: 'id', type: 4, required: false, description: 'Inspect a specific case number' }
   ],
   async execute(interaction) {
+    const caseId = interaction.options.getInteger('id');
     const user = interaction.options.getUser('user');
-    const text = interaction.options.getString('text');
-    db.addNote(user.id, interaction.user.id, text);
 
-    const embed = buildEmbed('Staff Note Added', '📝', 0x9b59b6, [
-      { name: 'User', value: `<@${user.id}>`, inline: true },
-      { name: 'Added By', value: `<@${interaction.user.id}>`, inline: true },
-      { name: 'Note', value: text, inline: false }
+    if (caseId) {
+      const c = db.getCase(caseId);
+      if (!c) return interaction.editReply(`❌ Case #${caseId} not found.`);
+
+      const embed = buildEmbed(`Case #${caseId}`, '📁', 0x3498db, [
+        { name: 'Action', value: c.action.toUpperCase(), inline: true },
+        { name: 'Target User', value: `<@${c.user}>`, inline: true },
+        { name: 'Moderator', value: `<@${c.moderator}>`, inline: true },
+        { name: 'Channel', value: c.channel ? `<#${c.channel}>` : 'N/A', inline: true },
+        { name: 'Timestamp', value: `<t:${Math.floor(new Date(c.timestamp).getTime() / 1000)}:F>`, inline: true },
+        { name: 'Reason', value: c.reason, inline: false }
+      ]);
+      return interaction.editReply({ embeds: [embed] });
+    }
+
+    if (user) {
+      const userCases = db.getUserCases(user.id);
+      if (userCases.length === 0) {
+        return interaction.editReply({
+          embeds: [buildEmbed('No Cases Found', '🫠', 0x95a5a6, [{ name: 'Status', value: `No records on <@${user.id}>.` }])]
+        });
+      }
+
+      const formatted = userCases.slice(-10).map(c => `**#${c.id}** • \`${c.action.toUpperCase()}\` — ${c.reason} (<t:${Math.floor(new Date(c.timestamp).getTime() / 1000)}:R>)`).join('\n');
+      const embed = buildEmbed('User Case History', '📁', 0x3498db, [
+        { name: 'User', value: `<@${user.id}>`, inline: true },
+        { name: 'Total Cases', value: `${userCases.length}`, inline: true },
+        { name: 'Recent Records', value: formatted.slice(0, 1000), inline: false }
+      ]);
+      return interaction.editReply({ embeds: [embed] });
+    }
+
+    const all = Object.entries(db.data.cases).slice(-10).reverse().map(([id, c]) => `**#${id}** • \`${c.action.toUpperCase()}\` on <@${c.user}> by <@${c.moderator}> — *${c.reason}*`).join('\n') || 'No cases recorded yet.';
+    const embed = buildEmbed('Recent Guild Cases', '📁', 0x3498db, [
+      { name: 'Total Cases', value: `${db.data.caseCounter}`, inline: true },
+      { name: 'Recent 10 Cases', value: all.slice(0, 1000), inline: false }
     ]);
-
-    await interaction.editReply({ embeds: [embed] });
-    await sendModLog(interaction.guild, embed);
+    return interaction.editReply({ embeds: [embed] });
   }
 };
 
 export const notes = {
   name: 'notes',
-  description: "View a user's staff notes",
-  options: [{ name: 'user', description: 'User', type: 6, required: true }],
+  description: 'View or add private staff notes on a user',
+  options: [
+    { name: 'user', description: 'Target user', type: 6, required: true },
+    { name: 'add', description: 'Add a new private staff note to this user', type: 3, required: false }
+  ],
   async execute(interaction) {
     const user = interaction.options.getUser('user');
+    const newNote = interaction.options.getString('add');
+
+    if (newNote) {
+      db.addNote(user.id, interaction.user.id, newNote);
+      const embed = buildEmbed('Staff Note Added', '📝', 0x9b59b6, [
+        { name: 'User', value: `<@${user.id}>`, inline: true },
+        { name: 'Added By', value: `<@${interaction.user.id}>`, inline: true },
+        { name: 'Note', value: newNote, inline: false }
+      ]);
+      await interaction.editReply({ embeds: [embed] });
+      return sendModLog(interaction.guild, embed);
+    }
+
     const list = db.getNotes(user.id);
     if (!list.length) return interaction.editReply(`No staff notes recorded on <@${user.id}>.`);
 
     const formatted = list.map((n, i) => `**${i + 1}.** ${n.text} — *(by <@${n.by}> <t:${Math.floor(n.at / 1000)}:R>)*`).join('\n');
-
     const embed = buildEmbed(`Staff Notes: ${user.username}`, '📝', 0x9b59b6, [
       { name: 'Entries', value: formatted.slice(0, 1000) }
     ]);
-
     return interaction.editReply({ embeds: [embed] });
   }
 };
@@ -639,137 +599,99 @@ export const nickname = {
 
 export const lockdown = {
   name: 'lockdown',
-  description: 'Lock all text channels in server',
-  async execute(interaction) {
-    const channels = interaction.guild.channels.cache.filter(c => c.isTextBased() && !c.isThread());
-    let count = 0;
-    for (const [, ch] of channels) {
-      await ch.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: false }).catch(() => null);
-      count++;
-    }
-
-    const caseId = db.createCase({
-      action: 'lockdown',
-      userId: interaction.user.id,
-      moderatorId: interaction.user.id,
-      reason: `Locked down ${count} channels`,
-      channelId: interaction.channelId,
-      guildId: interaction.guildId
-    });
-
-    const embed = buildEmbed('Server Lockdown', '🔒', 0xe74c3c, [
-      { name: 'Channels Affected', value: `${count}`, inline: true },
-      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
-      { name: 'Case', value: `#${caseId}`, inline: true }
-    ]);
-
-    await interaction.editReply({ embeds: [embed] });
-    await sendModLog(interaction.guild, embed);
-  }
-};
-
-export const unlockdown = {
-  name: 'unlockdown',
-  description: 'Unlock all text channels in server',
-  async execute(interaction) {
-    const channels = interaction.guild.channels.cache.filter(c => c.isTextBased() && !c.isThread());
-    let count = 0;
-    for (const [, ch] of channels) {
-      await ch.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: null }).catch(() => null);
-      count++;
-    }
-
-    const caseId = db.createCase({
-      action: 'unlockdown',
-      userId: interaction.user.id,
-      moderatorId: interaction.user.id,
-      reason: `Unlocked ${count} channels`,
-      channelId: interaction.channelId,
-      guildId: interaction.guildId
-    });
-
-    const embed = buildEmbed('Server Unlockdown', '🔓', 0x2ecc71, [
-      { name: 'Channels Affected', value: `${count}`, inline: true },
-      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
-      { name: 'Case', value: `#${caseId}`, inline: true }
-    ]);
-
-    await interaction.editReply({ embeds: [embed] });
-    await sendModLog(interaction.guild, embed);
-  }
-};
-
-export const masskick = {
-  name: 'masskick',
-  description: 'Kick multiple users at once',
+  description: 'Lock or unlock all text channels across the server',
   options: [
+    {
+      name: 'action',
+      description: 'Choose whether to lock or unlock channels',
+      type: 3,
+      required: true,
+      choices: [
+        { name: '🔒 Lock All Channels', value: 'lock' },
+        { name: '🔓 Unlock All Channels', value: 'unlock' }
+      ]
+    }
+  ],
+  async execute(interaction) {
+    const action = interaction.options.getString('action');
+    const isLock = action === 'lock';
+    const channels = interaction.guild.channels.cache.filter(c => c.isTextBased() && !c.isThread());
+    let count = 0;
+
+    for (const [, ch] of channels) {
+      await ch.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: isLock ? false : null }).catch(() => null);
+      count++;
+    }
+
+    const caseId = db.createCase({
+      action: isLock ? 'lockdown' : 'unlockdown',
+      userId: interaction.user.id,
+      moderatorId: interaction.user.id,
+      reason: `${isLock ? 'Locked down' : 'Unlocked'} ${count} channels`,
+      channelId: interaction.channelId,
+      guildId: interaction.guildId
+    });
+
+    const embed = buildEmbed(isLock ? 'Server Lockdown' : 'Server Unlockdown', isLock ? '🔒' : '🔓', isLock ? 0xe74c3c : 0x2ecc71, [
+      { name: 'Channels Affected', value: `${count}`, inline: true },
+      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+      { name: 'Case', value: `#${caseId}`, inline: true }
+    ]);
+
+    await interaction.editReply({ embeds: [embed] });
+    await sendModLog(interaction.guild, embed);
+  }
+};
+
+export const massmod = {
+  name: 'massmod',
+  description: 'Kick or ban multiple users simultaneously',
+  options: [
+    {
+      name: 'action',
+      description: 'Action to perform',
+      type: 3,
+      required: true,
+      choices: [
+        { name: '👢 Mass Kick', value: 'kick' },
+        { name: '🔨 Mass Ban', value: 'ban' }
+      ]
+    },
     { name: 'users', description: 'Comma-separated user IDs', type: 3, required: true },
     { name: 'reason', description: 'Reason', type: 3, required: false }
   ],
   async execute(interaction) {
+    const action = interaction.options.getString('action');
     const ids = interaction.options.getString('users').split(',').map(s => s.trim()).filter(Boolean);
-    const reason = interaction.options.getString('reason') || 'Mass kick';
+    const reason = interaction.options.getString('reason') || `Mass ${action}`;
+    const isBan = action === 'ban';
     let success = 0, fail = 0;
 
     for (const id of ids) {
-      const member = await interaction.guild.members.fetch(id).catch(() => null);
-      if (member) {
-        await member.kick(reason).then(() => success++).catch(() => fail++);
+      if (isBan) {
+        const ok = await interaction.guild.members.ban(id, { reason }).then(() => true).catch(() => false);
+        if (ok) success++;
+        else fail++;
       } else {
-        fail++;
+        const member = await interaction.guild.members.fetch(id).catch(() => null);
+        if (member) {
+          await member.kick(reason).then(() => success++).catch(() => fail++);
+        } else {
+          fail++;
+        }
       }
     }
 
     const caseId = db.createCase({
-      action: 'masskick',
+      action: `mass_${action}`,
       userId: ids.join(', '),
       moderatorId: interaction.user.id,
-      reason: `${reason} (${success} kicked, ${fail} failed)`,
+      reason: `${reason} (${success} ${action}ned, ${fail} failed)`,
       channelId: interaction.channelId,
       guildId: interaction.guildId
     });
 
-    const embed = buildEmbed('Mass Kick Executed', '👢', 0x95a5a6, [
-      { name: 'Successful', value: `${success}`, inline: true },
-      { name: 'Failed', value: `${fail}`, inline: true },
-      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
-      { name: 'Reason', value: reason, inline: false },
-      { name: 'Case', value: `#${caseId}`, inline: true }
-    ]);
-
-    await interaction.editReply({ embeds: [embed] });
-    await sendModLog(interaction.guild, embed);
-  }
-};
-
-export const massban = {
-  name: 'massban',
-  description: 'Ban multiple users at once',
-  options: [
-    { name: 'users', description: 'Comma-separated user IDs', type: 3, required: true },
-    { name: 'reason', description: 'Reason', type: 3, required: false }
-  ],
-  async execute(interaction) {
-    const ids = interaction.options.getString('users').split(',').map(s => s.trim()).filter(Boolean);
-    const reason = interaction.options.getString('reason') || 'Mass ban';
-    let success = 0, fail = 0;
-
-    for (const id of ids) {
-      const ok = await interaction.guild.members.ban(id, { reason }).then(() => true).catch(() => false);
-      if (ok) success++;
-      else fail++;
-    }
-
-    const caseId = db.createCase({
-      action: 'massban',
-      userId: ids.join(', '),
-      moderatorId: interaction.user.id,
-      reason: `${reason} (${success} banned, ${fail} failed)`,
-      channelId: interaction.channelId,
-      guildId: interaction.guildId
-    });
-
-    const embed = buildEmbed('Mass Ban Executed', '🔨', 0xe74c3c, [
+    const embed = buildEmbed(`Mass ${isBan ? 'Ban' : 'Kick'} Executed`, isBan ? '🔨' : '👢', isBan ? 0xe74c3c : 0x95a5a6, [
       { name: 'Successful', value: `${success}`, inline: true },
       { name: 'Failed', value: `${fail}`, inline: true },
       { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
@@ -784,67 +706,45 @@ export const massban = {
 
 export const muteall = {
   name: 'muteall',
-  description: 'Server-mute everyone in your current VC',
+  description: 'Server-mute or unmute everyone in your current VC',
+  options: [
+    {
+      name: 'action',
+      description: 'Choose whether to mute or unmute all members',
+      type: 3,
+      required: true,
+      choices: [
+        { name: '🔇 Mute Everyone', value: 'mute' },
+        { name: '🔊 Unmute Everyone', value: 'unmute' }
+      ]
+    }
+  ],
   async execute(interaction) {
+    const action = interaction.options.getString('action');
+    const isMute = action === 'mute';
     const vc = interaction.member.voice.channel;
     if (!vc) return interaction.editReply('❌ You must join a voice channel first.');
 
     let count = 0;
     for (const [, member] of vc.members) {
       if (!member.user.bot) {
-        await member.voice.setMute(true).catch(() => null);
+        await member.voice.setMute(isMute).catch(() => null);
         count++;
       }
     }
 
     const caseId = db.createCase({
-      action: 'muteall',
+      action: isMute ? 'muteall' : 'unmuteall',
       userId: vc.id,
       moderatorId: interaction.user.id,
-      reason: `Muted all ${count} members in ${vc.name}`,
+      reason: `${isMute ? 'Muted' : 'Unmuted'} all ${count} members in ${vc.name}`,
       channelId: interaction.channelId,
       guildId: interaction.guildId
     });
 
-    const embed = buildEmbed('VC Muted', '🔇', 0x95a5a6, [
+    const embed = buildEmbed(isMute ? 'VC Muted' : 'VC Unmuted', isMute ? '🔇' : '🔊', isMute ? 0x95a5a6 : 0x2ecc71, [
       { name: 'Channel', value: vc.name, inline: true },
-      { name: 'Members Muted', value: `${count}`, inline: true },
-      { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
-      { name: 'Case', value: `#${caseId}`, inline: true }
-    ]);
-
-    await interaction.editReply({ embeds: [embed] });
-    await sendModLog(interaction.guild, embed);
-  }
-};
-
-export const unmuteall = {
-  name: 'unmuteall',
-  description: 'Unmute everyone in your current VC',
-  async execute(interaction) {
-    const vc = interaction.member.voice.channel;
-    if (!vc) return interaction.editReply('❌ You must join a voice channel first.');
-
-    let count = 0;
-    for (const [, member] of vc.members) {
-      if (!member.user.bot) {
-        await member.voice.setMute(false).catch(() => null);
-        count++;
-      }
-    }
-
-    const caseId = db.createCase({
-      action: 'unmuteall',
-      userId: vc.id,
-      moderatorId: interaction.user.id,
-      reason: `Unmuted all ${count} members in ${vc.name}`,
-      channelId: interaction.channelId,
-      guildId: interaction.guildId
-    });
-
-    const embed = buildEmbed('VC Unmuted', '🔊', 0x2ecc71, [
-      { name: 'Channel', value: vc.name, inline: true },
-      { name: 'Members Unmuted', value: `${count}`, inline: true },
+      { name: 'Members Affected', value: `${count}`, inline: true },
       { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
       { name: 'Case', value: `#${caseId}`, inline: true }
     ]);

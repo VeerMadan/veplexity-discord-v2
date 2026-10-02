@@ -21,7 +21,15 @@ function initialData() {
     users: {},
     afk: {},
     reminders: [],
-    confessionChannel: {}
+    confessionChannel: {},
+    tempVcConfigs: {},
+    activeTempVcs: {},
+    starboards: {},
+    starboardPosts: {},
+    counting: {},
+    birthdays: {},
+    announcedBirthdays: {},
+    birthdayConfigs: {}
   };
 }
 
@@ -69,6 +77,14 @@ class DatabaseService {
       parsed.afk ??= {};
       parsed.reminders ??= [];
       parsed.confessionChannel ??= {};
+      parsed.tempVcConfigs ??= {};
+      parsed.activeTempVcs ??= {};
+      parsed.starboards ??= {};
+      parsed.starboardPosts ??= {};
+      parsed.counting ??= {};
+      parsed.birthdays ??= {};
+      parsed.announcedBirthdays ??= {};
+      parsed.birthdayConfigs ??= {};
       return parsed;
     } catch (e) {
       console.error('[Database] Failed to load data, using default:', e);
@@ -300,6 +316,120 @@ class DatabaseService {
   removeReminder(id) {
     this.data.reminders = this.data.reminders.filter(r => r.id !== id);
     this.save();
+  }
+
+  // --- DYNAMIC TEMP VOICE CHANNELS (JOIN TO CREATE) ---
+  setTempVcConfig(guildId, config) {
+    this.data.tempVcConfigs[guildId] = config;
+    this.save();
+  }
+
+  getTempVcConfig(guildId) {
+    return this.data.tempVcConfigs[guildId] || null;
+  }
+
+  addActiveTempVc(channelId, ownerId) {
+    this.data.activeTempVcs[channelId] = ownerId;
+    this.save();
+  }
+
+  getTempVcOwner(channelId) {
+    return this.data.activeTempVcs[channelId] || null;
+  }
+
+  removeActiveTempVc(channelId) {
+    if (this.data.activeTempVcs[channelId]) {
+      delete this.data.activeTempVcs[channelId];
+      this.save();
+    }
+  }
+
+  isTempVc(channelId) {
+    return !!this.data.activeTempVcs[channelId];
+  }
+
+  // --- STARBOARD (HALL OF FAME) ---
+  setStarboardConfig(guildId, config) {
+    this.data.starboards[guildId] = config;
+    this.save();
+  }
+
+  getStarboardConfig(guildId) {
+    return this.data.starboards[guildId] || null;
+  }
+
+  setStarboardPost(origMsgId, starMsgId) {
+    this.data.starboardPosts[origMsgId] = starMsgId;
+    this.save();
+  }
+
+  getStarboardPost(origMsgId) {
+    return this.data.starboardPosts[origMsgId] || null;
+  }
+
+  // --- COUNTING GAME ---
+  setCountingConfig(guildId, config) {
+    this.data.counting[guildId] = {
+      channelId: config.channelId,
+      currentCount: config.currentCount || 0,
+      lastUserId: config.lastUserId || null,
+      highScore: config.highScore || 0
+    };
+    this.save();
+  }
+
+  getCountingConfig(guildId) {
+    return this.data.counting[guildId] || null;
+  }
+
+  updateCounting(guildId, count, lastUserId, highScore) {
+    const curr = this.getCountingConfig(guildId) || { channelId: null, currentCount: 0, lastUserId: null, highScore: 0 };
+    curr.currentCount = count;
+    curr.lastUserId = lastUserId;
+    if (highScore !== undefined) {
+      curr.highScore = Math.max(curr.highScore || 0, highScore);
+    }
+    this.data.counting[guildId] = curr;
+    this.save();
+    return curr;
+  }
+
+  // --- BIRTHDAYS ---
+  setBirthday(userId, dateStr) {
+    this.data.birthdays[userId] = dateStr;
+    this.save();
+  }
+
+  getBirthday(userId) {
+    return this.data.birthdays[userId] || null;
+  }
+
+  getAllBirthdays() {
+    return this.data.birthdays || {};
+  }
+
+  hasAnnouncedBirthday(dateStr, userId) {
+    const list = this.data.announcedBirthdays[dateStr] || [];
+    return list.includes(userId);
+  }
+
+  markBirthdayAnnounced(dateStr, userId) {
+    this.data.announcedBirthdays[dateStr] ??= [];
+    if (!this.data.announcedBirthdays[dateStr].includes(userId)) {
+      this.data.announcedBirthdays[dateStr].push(userId);
+      this.save();
+    }
+  }
+
+  setBirthdayConfig(guildId, config) {
+    this.data.birthdayConfigs ??= {};
+    this.data.birthdayConfigs[guildId] = config;
+    this.save();
+  }
+
+  getBirthdayConfig(guildId) {
+    this.data.birthdayConfigs ??= {};
+    return this.data.birthdayConfigs[guildId] || null;
   }
 }
 
