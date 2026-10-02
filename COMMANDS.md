@@ -1,8 +1,25 @@
-# 🤖 VePlexity Bot — Full 99 Slash Commands Catalog
+# 🤖 VePlexity Bot — Full 100 Slash Commands Catalog
 
-> **Total Commands:** `99 / 100` (Strictly under Discord Guild Limit)  
+> **Total Commands:** `100 / 100` (Maximum Discord Guild Capacity)  
 > **Prefix:** `/` (Discord Slash Commands)  
 > **Bot Client ID:** `1470533218376613908`
+
+---
+
+## 🎧 Lossless Studio Music & Local FLAC Library (1 Master Suite)
+*Zero-buffering lossless audio playback directly streaming from your 400+ FLAC library stored on Azure VM with autocomplete.*
+
+| Command | Arguments | Description |
+| :--- | :--- | :--- |
+| `/music play` | `<song>` | **Instant Autocomplete!** Plays any track from your local 400+ FLAC lossless studio library or streams from online fallback. |
+| `/music library` | `[search]` | Explores the local FLAC library folder (`~/music` on Azure VM), displays total indexed tracks, and lists songs. |
+| `/music pause` | *None* | Pauses the currently playing track. |
+| `/music resume` | *None* | Resumes playback of a paused track. |
+| `/music skip` | *None* | Skips the current track and moves to the next song in queue. |
+| `/music stop` | *None* | Stops playback, clears the queue, and disconnects the bot from the voice channel. |
+| `/music queue` | *None* | Displays upcoming tracks in the music queue. |
+| `/music nowplaying` | *None* | Shows track name, artist, interactive progress bar, volume, and audio quality (e.g. 💎 FLAC 48kHz Lossless). |
+| `/music volume` | `<level>` | Adjusts audio volume between 0% and 150%. |
 
 ---
 

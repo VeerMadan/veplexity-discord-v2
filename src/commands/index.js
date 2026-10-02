@@ -2,6 +2,7 @@ import * as moderation from './moderation/index.js';
 import * as fun from './fun/index.js';
 import * as utility from './utility/index.js';
 import * as economy from './economy/index.js';
+import * as music from './music/index.js';
 
 export const MODERATION_COMMAND_NAMES = [
   'warn', 'pvc', 'kick', 'ban', 'unban', 'timeout', 'purge',
@@ -14,7 +15,8 @@ export const allCommandsList = [
   ...Object.values(moderation),
   ...Object.values(fun),
   ...Object.values(utility),
-  ...Object.values(economy)
+  ...Object.values(economy),
+  ...Object.values(music)
 ];
 
 export const commandsMap = new Map();

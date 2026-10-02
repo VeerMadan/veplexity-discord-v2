@@ -10,6 +10,7 @@ import db from './src/services/database.js';
 import musicManager from './src/services/music/MusicManager.js';
 import { generateAiReply } from './src/services/aiService.js';
 import { deletedMessages, editedMessages } from './src/services/snipeService.js';
+import gifService from './src/services/gifService.js';
 
 // 🔧 Network & Process Configuration
 if (ffmpeg) process.env.FFMPEG_PATH = ffmpeg;
@@ -171,17 +172,44 @@ client.on('messageCreate', async (message) => {
   const history = channelMemory.get(message.channelId) || [];
 
   try {
-    const reply = await generateAiReply({
+    const rawReply = await generateAiReply({
       prompt: contextualPrompt,
       mode: activeMode,
       history,
       maxTokens: 400
     });
 
-    await message.reply(reply.slice(0, 2000));
+    // 🎬 CONTEXTUAL & DYNAMIC REACTION GIF ENGINE
+    const { cleanText: finalReply, tag } = gifService.extractGifTag(rawReply);
+    const gifResult = await gifService.getGifForContext({
+      text: finalReply,
+      prompt: cleanText,
+      mode: activeMode,
+      tag,
+      chance: 0.40 // ~40% random chance to send matching GIF
+    });
+
+    if (gifResult?.url) {
+      const modeColors = {
+        savage: 0xff4757,
+        flirty: 0xff2a6d,
+        chill: 0x2ecc71,
+        default: 0x9b59b6
+      };
+      const gifEmbed = new EmbedBuilder()
+        .setColor(modeColors[activeMode] || 0x3498db)
+        .setImage(gifResult.url);
+
+      await message.reply({
+        content: finalReply.slice(0, 2000),
+        embeds: [gifEmbed]
+      });
+    } else {
+      await message.reply(finalReply.slice(0, 2000));
+    }
 
     history.push({ role: 'user', content: contextualPrompt });
-    history.push({ role: 'model', content: reply });
+    history.push({ role: 'model', content: finalReply });
     channelMemory.set(message.channelId, history.slice(-12));
   } catch (error) {
     console.error('[Chatbot Error]', error.message);

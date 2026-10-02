@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import fs from 'fs';
 import path from 'path';
 import { formatSeconds } from '../../utils/helpers.js';
+import localLibrary from './LocalLibrary.js';
 
 const YTDlp = YTDlpWrap.default || YTDlpWrap;
 const ytSearcher = YouTube.default || YouTube;
@@ -82,6 +83,42 @@ class StreamResolverService {
   async resolveTracks(query, requestedBy) {
     await this.initPromise;
     const trimmed = query.trim();
+
+    // 0️⃣ LOCAL FLAC / STUDIO AUDIO LIBRARY
+    if (fs.existsSync(trimmed)) {
+      const baseName = path.basename(trimmed, path.extname(trimmed));
+      return [{
+        title: baseName,
+        author: 'Local Studio Library',
+        searchQuery: trimmed,
+        url: trimmed,
+        sourceUrl: trimmed,
+        filePath: trimmed,
+        isLocal: true,
+        durationSec: 210,
+        duration: 'FLAC Lossless',
+        thumbnail: 'https://cdn-icons-png.flaticon.com/512/3844/3844724.png',
+        requestedBy
+      }];
+    }
+
+    const localMatches = localLibrary.search(trimmed, 1);
+    if (localMatches.length > 0 && !trimmed.startsWith('http')) {
+      const song = localMatches[0];
+      return [{
+        title: song.title,
+        author: song.author,
+        searchQuery: song.filePath,
+        url: song.filePath,
+        sourceUrl: song.filePath,
+        filePath: song.filePath,
+        isLocal: true,
+        durationSec: song.durationSec || 210,
+        duration: song.duration || 'FLAC Lossless',
+        thumbnail: song.thumbnail,
+        requestedBy
+      }];
+    }
 
     // 1️⃣ SPOTIFY URL
     if (this.isSpotifyUrl(trimmed)) {
@@ -206,6 +243,37 @@ class StreamResolverService {
     }
 
     const clean = String(queryOrUrl).trim();
+
+    // ── Direct Local FLAC / Studio Audio Streaming ───────────────────
+    const isLocal = fs.existsSync(clean) || (clean && !clean.startsWith('http') && fs.existsSync(path.resolve(clean)));
+    if (isLocal) {
+      const localPath = fs.existsSync(clean) ? clean : path.resolve(clean);
+      console.log(`[StreamResolver] 🎵 Streaming local FLAC studio file: ${localPath}`);
+
+      const ffmpegProc = spawn(FFMPEG_CMD, [
+        '-analyzeduration', '0',
+        '-loglevel', '0',
+        '-i', localPath,
+        '-f', 's16le',
+        '-ar', '48000',
+        '-ac', '2',
+        'pipe:1'
+      ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+      ffmpegProc.on('error', e => {
+        console.error('[StreamResolver] local ffmpeg process error:', e.message);
+      });
+
+      const resource = createAudioResource(ffmpegProc.stdout, {
+        inputType: StreamType.Raw,
+        inlineVolume: true
+      });
+
+      resource.volume?.setVolume(volume);
+      resource._ffmpegProc = ffmpegProc;
+      return resource;
+    }
+
     const sourceTarget = clean.startsWith('http') ? clean : `scsearch1:${clean}`;
 
     // ── Step 1: Extract the direct CDN audio URL ──────────────────────
