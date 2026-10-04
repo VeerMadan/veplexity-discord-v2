@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import dns from 'node:dns';
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import { Client, GatewayIntentBits, Partials, ChannelType, EmbedBuilder } from 'discord.js';
@@ -470,7 +471,132 @@ const app = express();
 app.use(cors({ origin: '*', methods: ['GET', 'POST'] }));
 app.use(express.json());
 
-app.get('/', (req, res) => res.send('VePlexity API Online 🚀'));
+// Serve static brand assets from bmcbrand folder
+app.use('/brand', express.static(path.resolve('./bmcbrand')));
+
+// 🎨 Sleek Dark-Mode Web Portal & Buy Me a Coffee Support Hub
+app.get('/', (req, res) => {
+  const uptimeSec = Math.floor(process.uptime());
+  const days = Math.floor(uptimeSec / 86400);
+  const hours = Math.floor((uptimeSec % 86400) / 3600);
+  const minutes = Math.floor((uptimeSec % 3600) / 60);
+  const uptimeStr = `${days > 0 ? `${days}d ` : ''}${hours}h ${minutes}m`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VePlexity Bot — Official Portal & Support</title>
+  <link rel="icon" href="/brand/bmc-logo-yellow.png">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background: #0c0e14; color: #f1f2f6; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 40px 20px; }
+    .container { max-width: 860px; width: 100%; display: flex; flex-direction: column; gap: 28px; }
+    .header { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .title { font-size: 2.8rem; font-weight: 800; background: linear-gradient(135deg, #BD5FFF, #FFDD00); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .badge-status { display: inline-flex; align-items: center; gap: 8px; background: rgba(46, 204, 113, 0.15); border: 1px solid #2ecc71; color: #2ecc71; padding: 6px 14px; border-radius: 999px; font-size: 0.9rem; font-weight: 600; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+    .card { background: rgba(25, 28, 41, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 20px; text-align: center; }
+    .card-num { font-size: 1.8rem; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .card-label { font-size: 0.85rem; color: #8a8d9b; text-transform: uppercase; letter-spacing: 0.05em; }
+    .support-section { background: linear-gradient(145deg, rgba(189, 95, 255, 0.12), rgba(255, 221, 0, 0.08)); border: 1px solid rgba(189, 95, 255, 0.3); border-radius: 20px; padding: 32px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 20px; }
+    .support-title { font-size: 1.8rem; font-weight: 700; color: #fff; }
+    .support-desc { max-width: 580px; color: #b0b4c3; font-size: 1rem; line-height: 1.6; }
+    .qr-card { background: #fff; padding: 14px; border-radius: 18px; box-shadow: 0 12px 36px rgba(189, 95, 255, 0.25); display: inline-block; }
+    .qr-card img { width: 190px; height: 190px; display: block; border-radius: 10px; }
+    .btn-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin-top: 10px; }
+    .footer { text-align: center; font-size: 0.85rem; color: #575a6b; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="badge-status">🟢 System Operational</div>
+      <h1 class="title">VePlexity Discord Bot</h1>
+      <p style="color: #8a8d9b; font-size: 1.05rem;">Next-Gen Lossless Studio Music, Savage AI Chatbot & Server Economy</p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="card">
+        <div class="card-num">${client.guilds.cache.size}</div>
+        <div class="card-label">Connected Servers</div>
+      </div>
+      <div class="card">
+        <div class="card-num">${client.users.cache.size}</div>
+        <div class="card-label">Server Members</div>
+      </div>
+      <div class="card">
+        <div class="card-num">${commandsMap.size}</div>
+        <div class="card-label">Slash Commands</div>
+      </div>
+      <div class="card">
+        <div class="card-num">${uptimeStr}</div>
+        <div class="card-label">Live Uptime</div>
+      </div>
+    </div>
+
+    <div class="support-section">
+      <h2 class="support-title">☕ Support the Project</h2>
+      <p class="support-desc">Fuel the bot's 24/7 lossless music engine, high-speed AI chatbot, and cloud VM infrastructure! Every cup of coffee directly supports development and unlocks server perks.</p>
+
+      <div class="qr-card">
+        <img src="/brand/bmc-qr-code.png" alt="Scan to Support on Buy Me a Coffee">
+      </div>
+      <p style="font-size: 0.85rem; color: #8a8d9b;">📱 Scan with phone camera or click below</p>
+
+      <div class="btn-group">
+        <a href="https://www.buymeacoffee.com/veplexity1" target="_blank" rel="noopener">
+          <img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=veplexity1&button_colour=BD5FFF&font_colour=ffffff&font_family=Comic&outline_colour=000000&coffee_colour=FFDD00" alt="Buy Me a Coffee Badge" style="height: 52px; border-radius: 10px;" />
+        </a>
+      </div>
+    </div>
+
+    <div class="footer">
+      VePlexity Bot v2.0 • Hosted on Azure Cloud • Powered by Google DeepMind & Discord.js
+    </div>
+  </div>
+
+  <!-- Official Buy Me a Coffee Floating Widget -->
+  <script data-name="BMC-Widget" data-cfasync="false" src="https://cdnjs.buymeacoffee.com/1.0.0/widget.prod.min.js" data-id="veplexity1" data-description="Support me on Buy me a coffee!" data-message="Fuel the 24/7 lossless music & AI engine! ☕💖" data-color="#BD5FFF" data-position="Right" data-x_margin="18" data-y_margin="18"></script>
+</body>
+</html>`;
+
+  res.send(html);
+});
+
+// ☕ Buy Me a Coffee Webhook Receiver
+app.post('/api/webhook/bmc', async (req, res) => {
+  try {
+    const data = req.body?.response || req.body || {};
+    const supporter = data.supporter_name || 'Generous Supporter';
+    const coffees = data.support_coffees || 1;
+    const note = data.supporter_message || 'No message';
+
+    console.log(`[BMC Webhook] ☕ New Coffee from ${supporter} (${coffees} cups): "${note}"`);
+
+    // Broadcast to primary guild announcement/system channel
+    for (const guild of client.guilds.cache.values()) {
+      const targetChannel = guild.systemChannel || guild.channels.cache.find(c => c.isTextBased() && c.name.includes('general'));
+      if (targetChannel?.isTextBased()) {
+        const embed = new EmbedBuilder()
+          .setColor(0xBD5FFF)
+          .setTitle('☕ New Supporter Alert! 🎉')
+          .setDescription(`**${supporter}** just bought **${coffees} coffee(s)** for VePlexity!\n\n💬 *"${note}"*\n\nThank you so much for supporting the bot! 💖`)
+          .setThumbnail('https://media1.giphy.com/media/TDQOtnWgsBx99cNoyH/giphy.gif')
+          .setFooter({ text: 'Buy Me a Coffee Supporter • buymeacoffee.com/veplexity1' })
+          .setTimestamp();
+
+        await targetChannel.send({ embeds: [embed] }).catch(() => {});
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[BMC Webhook Error]:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/api/stats', (req, res) => {
   res.json({

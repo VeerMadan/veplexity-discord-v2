@@ -30,7 +30,14 @@ export const test = {
 
     embed.setFooter({ text: 'VePlexity Bot Diagnostics', iconURL: client.user.displayAvatarURL() });
 
-    return interaction.editReply({ embeds: [embed] });
+    const bmcRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel('☕ Buy Me a Coffee')
+        .setStyle(ButtonStyle.Link)
+        .setURL('https://www.buymeacoffee.com/veplexity1')
+    );
+
+    return interaction.editReply({ embeds: [embed], components: [bmcRow] });
   }
 };
 
@@ -48,7 +55,15 @@ export const serverinfo = {
       { name: 'Channels', value: `${guild.channels.cache.size}`, inline: true }
     ]);
     if (guild.iconURL()) embed.setThumbnail(guild.iconURL());
-    return interaction.editReply({ embeds: [embed] });
+
+    const bmcRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel('☕ Support on Buy Me a Coffee')
+        .setStyle(ButtonStyle.Link)
+        .setURL('https://www.buymeacoffee.com/veplexity1')
+    );
+
+    return interaction.editReply({ embeds: [embed], components: [bmcRow] });
   }
 };
 
