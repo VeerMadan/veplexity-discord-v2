@@ -63,7 +63,30 @@ class StreamResolverService {
         thumbnail: v.thumbnail?.url || null
       })).filter(t => t.url);
     } catch (error) {
-      console.error('[StreamResolver] Search error:', error.message);
+      console.warn('[StreamResolver] youtube-sr search error, falling back to yt-dlp:', error.message);
+      try {
+        if (this.ytDlp) {
+          const raw = await this.ytDlp.execPromise([
+            `ytsearch${limit}:${query}`,
+            '--dump-single-json',
+            '--flat-playlist',
+            '--no-warnings'
+          ]);
+          const parsed = JSON.parse(raw);
+          const entries = parsed.entries || [parsed];
+          return entries.filter(e => e && (e.url || e.id)).map(v => ({
+            id: v.id,
+            title: v.title || 'Unknown Title',
+            author: v.uploader || v.channel || 'Unknown Artist',
+            url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
+            durationSec: Math.round(v.duration || 0),
+            duration: formatSeconds(Math.round(v.duration || 0)),
+            thumbnail: v.thumbnails?.[0]?.url || null
+          }));
+        }
+      } catch (ytErr) {
+        console.error('[StreamResolver] yt-dlp search also failed:', ytErr.message);
+      }
       return [];
     }
   }
@@ -85,6 +108,43 @@ class StreamResolverService {
     const trimmed = query.trim();
 
     // 0️⃣ LOCAL FLAC / STUDIO AUDIO LIBRARY
+    // Check by song id first (e.g. local_123 from autocomplete)
+    const songById = localLibrary.getSongById(trimmed);
+    if (songById) {
+      return [{
+        title: songById.title,
+        author: songById.author,
+        searchQuery: songById.filePath,
+        url: songById.filePath,
+        sourceUrl: songById.filePath,
+        filePath: songById.filePath,
+        isLocal: true,
+        durationSec: songById.durationSec || 210,
+        duration: songById.duration || 'FLAC Lossless',
+        thumbnail: songById.thumbnail,
+        requestedBy
+      }];
+    }
+
+    // Check by song path
+    const songByPath = localLibrary.getSongByPath(trimmed);
+    if (songByPath) {
+      return [{
+        title: songByPath.title,
+        author: songByPath.author,
+        searchQuery: songByPath.filePath,
+        url: songByPath.filePath,
+        sourceUrl: songByPath.filePath,
+        filePath: songByPath.filePath,
+        isLocal: true,
+        durationSec: songByPath.durationSec || 210,
+        duration: songByPath.duration || 'FLAC Lossless',
+        thumbnail: songByPath.thumbnail,
+        requestedBy
+      }];
+    }
+
+    // Check exact filesystem path
     if (fs.existsSync(trimmed)) {
       const baseName = path.basename(trimmed, path.extname(trimmed));
       return [{
@@ -102,22 +162,25 @@ class StreamResolverService {
       }];
     }
 
-    const localMatches = localLibrary.search(trimmed, 1);
-    if (localMatches.length > 0 && !trimmed.startsWith('http')) {
-      const song = localMatches[0];
-      return [{
-        title: song.title,
-        author: song.author,
-        searchQuery: song.filePath,
-        url: song.filePath,
-        sourceUrl: song.filePath,
-        filePath: song.filePath,
-        isLocal: true,
-        durationSec: song.durationSec || 210,
-        duration: song.duration || 'FLAC Lossless',
-        thumbnail: song.thumbnail,
-        requestedBy
-      }];
+    // Check text search against local library if not a web URL
+    if (!trimmed.startsWith('http')) {
+      const localMatches = localLibrary.search(trimmed, 1);
+      if (localMatches.length > 0) {
+        const song = localMatches[0];
+        return [{
+          title: song.title,
+          author: song.author,
+          searchQuery: song.filePath,
+          url: song.filePath,
+          sourceUrl: song.filePath,
+          filePath: song.filePath,
+          isLocal: true,
+          durationSec: song.durationSec || 210,
+          duration: song.duration || 'FLAC Lossless',
+          thumbnail: song.thumbnail,
+          requestedBy
+        }];
+      }
     }
 
     // 1️⃣ SPOTIFY URL
@@ -231,98 +294,98 @@ class StreamResolverService {
 
   /**
    * Creates an AudioResource by:
-   *  1. Using yt-dlp to extract the direct CDN audio URL (no piping raw bytes)
-   *  2. Spawning system ffmpeg to stream that URL and output 48kHz stereo PCM
-   *  3. Feeding ffmpeg's PCM stdout into @discordjs/voice as StreamType.Raw
-   *
-   * This avoids all intermediate pipe/prism-media issues.
+   *  1. Direct FLAC / local studio library file OR extracting direct CDN audio URL via yt-dlp
+   *  2. Spawning FFmpeg to decode and encode directly to high-bitrate Opus (192kbps) in audio mode
+   *  3. Using -page_duration 20000 so each 20ms frame is delivered with zero buffer burst/stutter
+   *  4. Feeding into @discordjs/voice as StreamType.OggOpus with zero Node.js CPU overhead
    */
-  async createAudioResource(queryOrUrl, volume = 1.0) {
+  async createAudioResource(queryOrUrl, volume = 1.0, seekSec = 0) {
     if (!this.ytDlp) {
       this.ytDlp = new YTDlp(BINARY_PATH);
     }
 
     const clean = String(queryOrUrl).trim();
-
-    // ── Direct Local FLAC / Studio Audio Streaming ───────────────────
     const isLocal = fs.existsSync(clean) || (clean && !clean.startsWith('http') && fs.existsSync(path.resolve(clean)));
+
+    let inputSource = null;
+    let isHttp = false;
+
     if (isLocal) {
-      const localPath = fs.existsSync(clean) ? clean : path.resolve(clean);
-      console.log(`[StreamResolver] 🎵 Streaming local FLAC studio file: ${localPath}`);
+      inputSource = fs.existsSync(clean) ? clean : path.resolve(clean);
+      console.log(`[StreamResolver] 🎵 Streaming local FLAC studio file: ${inputSource}`);
+    } else {
+      const sourceTarget = clean.startsWith('http') ? clean : `scsearch1:${clean}`;
+      console.log(`[StreamResolver] Extracting audio URL for: ${sourceTarget.slice(0, 60)}`);
+      const raw = await this.ytDlp.execPromise([
+        sourceTarget, '-f', 'ba/b', '--get-url', '--no-warnings'
+      ]);
+      const audioUrl = raw.trim().split('\n')[0];
 
-      const ffmpegProc = spawn(FFMPEG_CMD, [
-        '-analyzeduration', '0',
-        '-loglevel', '0',
-        '-i', localPath,
-        '-f', 's16le',
-        '-ar', '48000',
-        '-ac', '2',
-        'pipe:1'
-      ], { stdio: ['pipe', 'pipe', 'pipe'] });
-
-      ffmpegProc.on('error', e => {
-        console.error('[StreamResolver] local ffmpeg process error:', e.message);
-      });
-
-      const resource = createAudioResource(ffmpegProc.stdout, {
-        inputType: StreamType.Raw,
-        inlineVolume: true
-      });
-
-      resource.volume?.setVolume(volume);
-      resource._ffmpegProc = ffmpegProc;
-      return resource;
+      if (!audioUrl || !audioUrl.startsWith('http')) {
+        throw new Error(`Failed to extract audio URL from: ${sourceTarget}`);
+      }
+      inputSource = audioUrl;
+      isHttp = true;
+      console.log(`[StreamResolver] Got CDN URL: ${audioUrl.slice(0, 80)}...`);
     }
 
-    const sourceTarget = clean.startsWith('http') ? clean : `scsearch1:${clean}`;
+    const ffmpegArgs = [];
 
-    // ── Step 1: Extract the direct CDN audio URL ──────────────────────
-    console.log(`[StreamResolver] Extracting audio URL for: ${sourceTarget.slice(0, 60)}`);
-    const raw = await this.ytDlp.execPromise([
-      sourceTarget, '-f', 'ba/b', '--get-url', '--no-warnings'
-    ]);
-    const audioUrl = raw.trim().split('\n')[0];
-
-    if (!audioUrl || !audioUrl.startsWith('http')) {
-      throw new Error(`Failed to extract audio URL from: ${sourceTarget}`);
+    if (isHttp) {
+      ffmpegArgs.push(
+        '-reconnect', '1',
+        '-reconnect_streamed', '1',
+        '-reconnect_delay_max', '5'
+      );
     }
-    console.log(`[StreamResolver] Got CDN URL: ${audioUrl.slice(0, 80)}...`);
 
-    // ── Step 2: Spawn system ffmpeg to stream URL → 48kHz PCM stdout ─
-    //    -reconnect flags keep the HTTP stream alive on network hiccups.
-    //    Input options (-analyzeduration, -loglevel) come BEFORE -i.
-    //    Output options (-f, -ar, -ac) come AFTER -i.
-    const ffmpegProc = spawn(FFMPEG_CMD, [
-      '-reconnect',        '1',
-      '-reconnect_streamed', '1',
-      '-reconnect_delay_max', '5',
-      '-analyzeduration',  '0',
-      '-loglevel',         '0',
-      '-i',                audioUrl,
-      '-f',                's16le',
-      '-ar',               '48000',
-      '-ac',               '2',
+    if (seekSec > 0) {
+      ffmpegArgs.push('-ss', String(seekSec));
+    }
+
+    ffmpegArgs.push(
+      '-analyzeduration', '0',
+      '-loglevel', 'error',
+      '-i', inputSource
+    );
+
+    if (volume !== 1.0 && volume > 0) {
+      ffmpegArgs.push('-af', `volume=${volume}`);
+    }
+
+    ffmpegArgs.push(
+      '-c:a', 'libopus',
+      '-b:a', '192k',
+      '-vbr', 'on',
+      '-compression_level', '10',
+      '-application', 'audio',
+      '-page_duration', '20000',
+      '-f', 'opus',
+      '-ar', '48000',
+      '-ac', '2',
       'pipe:1'
-    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+    );
+
+    const ffmpegProc = spawn(FFMPEG_CMD, ffmpegArgs, {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
 
     ffmpegProc.on('error', e => {
       console.error('[StreamResolver] ffmpeg process error:', e.message);
     });
+
     ffmpegProc.stderr.on('data', d => {
       const msg = d.toString().trim();
       if (msg) console.error('[StreamResolver] ffmpeg stderr:', msg);
     });
 
-    // ── Step 3: Create Discord AudioResource from PCM stdout ─────────
     const resource = createAudioResource(ffmpegProc.stdout, {
-      inputType: StreamType.Raw,
-      inlineVolume: true
+      inputType: StreamType.OggOpus,
+      inlineVolume: false
     });
 
-    resource.volume?.setVolume(volume);
     resource._ffmpegProc = ffmpegProc;
-
-    console.log('[StreamResolver] AudioResource created from ffmpeg PCM stream');
+    console.log(`[StreamResolver] AudioResource created (192kbps OggOpus, seek=${seekSec}s, vol=${volume})`);
     return resource;
   }
 }

@@ -287,11 +287,18 @@ client.on('interactionCreate', async (interaction) => {
 client.on('voiceStateUpdate', async (oldState, newState) => {
   // 1. Music 24/7 disconnect handling
   if (oldState.member?.id === client.user?.id) {
+    console.log(`[Bot VoiceStateUpdate] oldChannel: ${oldState.channelId} -> newChannel: ${newState.channelId}`);
     if (oldState.channelId && !newState.channelId) {
-      const queue = musicManager.getQueue(oldState.guild.id);
-      if (queue && !queue.is247) {
-        queue.destroy();
-      }
+      setTimeout(() => {
+        const member = oldState.guild.members.me;
+        if (!member?.voice?.channelId) {
+          console.log(`[Bot VoiceStateUpdate] Confirmed bot disconnected from voice, destroying queue`);
+          const queue = musicManager.getQueue(oldState.guild.id);
+          if (queue && !queue.is247) {
+            queue.destroy();
+          }
+        }
+      }, 3000);
     }
     return;
   }

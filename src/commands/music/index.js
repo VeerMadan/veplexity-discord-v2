@@ -83,7 +83,7 @@ export const music = {
     const localMatches = localLibrary.search(query, 15);
     const suggestions = localMatches.map(song => ({
       name: `🎵 ${song.title} - ${song.author} [${song.format}]`.slice(0, 100),
-      value: song.filePath.slice(0, 100)
+      value: song.id || song.title.slice(0, 100)
     }));
 
     if (suggestions.length >= 10 || (query.length < 3 && suggestions.length > 0)) {
