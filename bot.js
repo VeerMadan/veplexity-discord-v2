@@ -14,6 +14,7 @@ import { deletedMessages, editedMessages } from './src/services/snipeService.js'
 import gifService from './src/services/gifService.js';
 import lyricsService from './src/services/music/LyricsService.js';
 import sendLyricsPagination from './src/utils/lyricsPaginator.js';
+import createApiRouter from './src/api/routes.js';
 
 // 🔧 Network & Process Configuration
 if (ffmpeg) process.env.FFMPEG_PATH = ffmpeg;
@@ -787,16 +788,8 @@ app.post('/api/webhook/bmc', async (req, res) => {
   }
 });
 
-app.get('/api/stats', (req, res) => {
-  res.json({
-    status: 'online',
-    ping: client.ws.ping,
-    servers: client.guilds.cache.size,
-    users: client.users.cache.size,
-    totalCases: db.data.caseCounter,
-    recentCases: Object.entries(db.data.cases).slice(-5).map(([id, data]) => ({ id, ...data }))
-  });
-});
+// 🌐 Full Bot Management & Dashboard REST API
+app.use('/api', createApiRouter(client));
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => console.log(`🌐 API listening on 0.0.0.0:${PORT}`));

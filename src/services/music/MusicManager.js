@@ -393,6 +393,8 @@ class MusicManager {
       duration: formatSeconds(Math.round(totalMs / 1000)),
       currentFormatted: formatMs(currentMs),
       totalFormatted: formatMs(totalMs),
+      currentMs,
+      totalMs,
       progressBar: bar,
       url: track.info.uri,
       thumbnail: track.info.artworkUrl || null,
@@ -404,6 +406,108 @@ class MusicManager {
       isAutoplay: !!player.get('autoplay'),
       is247: false
     };
+  }
+
+  async playDirect(guildId, voiceChannelId, textChannelId, query, user = null) {
+    const player = this.getOrCreatePlayer(guildId, voiceChannelId, textChannelId);
+    if (!player.connected) {
+      await player.connect();
+    }
+
+    const clean = (query || '').trim();
+    let res = null;
+
+    // 1. Check local FLAC master audio library
+    const songById = localLibrary.getSongById(clean);
+    const songByPath = localLibrary.getSongByPath(clean);
+    const isLocalPrefix = clean.toLowerCase().startsWith('local:') || clean.toLowerCase().startsWith('flac:');
+
+    if (songById) {
+      res = await player.search({ query: songById.filePath, source: 'local' }, user);
+    } else if (songByPath) {
+      res = await player.search({ query: songByPath.filePath, source: 'local' }, user);
+    } else if (isLocalPrefix) {
+      const cleanLocal = clean.replace(/^(local|flac):/i, '').trim();
+      const matches = localLibrary.search(cleanLocal, 1);
+      if (matches.length > 0) {
+        res = await player.search({ query: matches[0].filePath, source: 'local' }, user);
+      }
+    } else if (!clean.startsWith('http')) {
+      const localMatches = localLibrary.search(clean, 1);
+      if (localMatches.length > 0 && localMatches[0].title.toLowerCase() === clean.toLowerCase()) {
+        res = await player.search({ query: localMatches[0].filePath, source: 'local' }, user);
+      }
+    }
+
+    // 2. YouTube Search
+    if (!res || !res.tracks?.length) {
+      const ytQuery = clean.replace(/^(yt|youtube):/i, '').trim() || clean;
+      res = await player.search({ query: ytQuery }, user);
+    }
+
+    if (!res || !res.tracks?.length) {
+      throw new Error(`No tracks found for: "${query}"`);
+    }
+
+    if (res.loadType === 'playlist') {
+      await player.queue.add(res.tracks);
+      if (!player.playing && !player.paused) await player.play();
+      return { type: 'playlist', title: res.playlist?.title || 'Playlist', count: res.tracks.length };
+    } else {
+      const track = res.tracks[0];
+      await player.queue.add(track);
+      if (!player.playing && !player.paused) {
+        await player.play();
+      }
+      return { type: 'track', title: track.info.title, author: track.info.author, source: track.info.sourceName };
+    }
+  }
+
+  pause(guildId) {
+    const player = this.getPlayer(guildId);
+    if (!player) throw new Error('No active player in this server.');
+    return player.pause();
+  }
+
+  resume(guildId) {
+    const player = this.getPlayer(guildId);
+    if (!player) throw new Error('No active player in this server.');
+    return player.resume();
+  }
+
+  skip(guildId) {
+    const player = this.getPlayer(guildId);
+    if (!player) throw new Error('No active player in this server.');
+    return player.skip();
+  }
+
+  stop(guildId) {
+    const player = this.getPlayer(guildId);
+    if (!player) throw new Error('No active player in this server.');
+    return player.destroy();
+  }
+
+  setVolume(guildId, volume) {
+    const player = this.getPlayer(guildId);
+    if (!player) throw new Error('No active player in this server.');
+    const vol = Math.min(150, Math.max(0, parseInt(volume, 10) || 100));
+    return player.setVolume(vol);
+  }
+
+  removeQueueTrack(guildId, index) {
+    const player = this.getPlayer(guildId);
+    if (!player || !player.queue.tracks || !player.queue.tracks[index]) {
+      throw new Error('Track index not found in queue.');
+    }
+    const removed = player.queue.tracks.splice(index, 1);
+    return removed[0]?.info?.title;
+  }
+
+  clearQueue(guildId) {
+    const player = this.getPlayer(guildId);
+    if (!player) throw new Error('No active player in this server.');
+    player.queue.tracks = [];
+    return true;
   }
 }
 
