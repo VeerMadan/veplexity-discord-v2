@@ -1,18 +1,17 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import {
-  FALLBACK_ACTION_GIFS,
   ACTION_VERBS,
   PICKUP_LINES,
   TRUTH_QUESTIONS,
   DARE_CHALLENGES,
   FUN_FACTS,
   WYR_PROMPTS,
-  AFFIRMATIONS,
-  FUN_GIFS
+  AFFIRMATIONS
 } from '../../config/constants.js';
 import { buildEmbed } from '../../utils/embeds.js';
 import db from '../../services/database.js';
 import { generateAiReply } from '../../services/aiService.js';
+import gifService from '../../services/gifService.js';
 import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
 import musicManager from '../../services/music/MusicManager.js';
 
@@ -32,28 +31,17 @@ const ACTION_PAST_VERBS = {
   lick: 'licked'
 };
 
-async function fetchActionGif(category) {
-  try {
-    const res = await fetch(`https://api.otakugifs.xyz/gif?reaction=${category}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.url) return data.url;
-    }
-  } catch (e) {}
-
-  const list = FALLBACK_ACTION_GIFS[category] || FALLBACK_ACTION_GIFS.summon;
-  return list[Math.floor(Math.random() * list.length)];
-}
-
 async function handleAction(interaction, category) {
   const target = interaction.options.getUser('user');
-  const gif = await fetchActionGif(category);
+  const gif = await gifService.getActionGif(category);
   const verb = ACTION_PAST_VERBS[category] || `${category}ed`;
-  const isSelf = target.id === interaction.user.id;
+  const isSelf = target ? target.id === interaction.user.id : false;
 
   const description = isSelf
     ? `**<@${interaction.user.id}> ${verb} themselves... wait, what? 😳**`
-    : `**<@${interaction.user.id}> ${verb} <@${target.id}>!**`;
+    : target
+      ? `**<@${interaction.user.id}> ${verb} <@${target.id}>!**`
+      : `**<@${interaction.user.id}> performed ${category}!**`;
 
   const embed = new EmbedBuilder()
     .setColor(0xff2a6d)
@@ -102,8 +90,7 @@ export const action = {
   async execute(interaction) {
     const type = interaction.options.getString('type');
     if (type === 'cry') {
-      const gifs = FALLBACK_ACTION_GIFS.cry;
-      const gif = gifs[Math.floor(Math.random() * gifs.length)];
+      const gif = await gifService.getActionGif('cry');
       const embed = new EmbedBuilder()
         .setColor(0x3498db)
         .setDescription(`😭 **<@${interaction.user.id}> is crying... someone give them a hug!**`)
@@ -120,8 +107,7 @@ export const summon = {
   options: [{ name: 'user', description: 'User to summon', type: 6, required: true }],
   async execute(interaction) {
     const targetUser = interaction.options.getUser('user');
-    const summonGifs = FALLBACK_ACTION_GIFS.summon;
-    const gif = summonGifs[Math.floor(Math.random() * summonGifs.length)];
+    const gif = await gifService.searchGif('anime summon magic portal teleport shadow realm', 'summon');
 
     const phrases = [
       `🔮 <@${interaction.user.id}> has summoned <@${targetUser.id}> from the shadow realm!`,
@@ -211,7 +197,7 @@ export const eightball = {
     const colorMap = { positive: 0x2ecc71, neutral: 0xf1c40f, negative: 0xe74c3c };
     const emojiMap = { positive: '🟢', neutral: '🟡', negative: '🔴' };
 
-    const gif = FUN_GIFS.eightball[Math.floor(Math.random() * FUN_GIFS.eightball.length)];
+    const gif = await gifService.searchGif(`magic 8 ball crystal fortune ${pick.type} anime`, '8ball');
     const embed = new EmbedBuilder()
       .setColor(colorMap[pick.type])
       .setTitle('🔮 The Mystic 8-Ball Has Spoken')
@@ -234,7 +220,7 @@ export const coinflip = {
     const isHeads = Math.random() < 0.5;
     const result = isHeads ? 'HEADS' : 'TAILS';
     const emoji = isHeads ? '👑' : '🦅';
-    const gif = FUN_GIFS.coinflip[Math.floor(Math.random() * FUN_GIFS.coinflip.length)];
+    const gif = await gifService.searchGif('coin flip flipping coin gold anime', 'coinflip');
 
     const embed = new EmbedBuilder()
       .setColor(0xf1c40f)
@@ -260,7 +246,7 @@ export const roll = {
     const result = Math.floor(Math.random() * sides) + 1;
     const d6Emojis = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' };
     const diceIcon = (sides === 6 && d6Emojis[result]) ? d6Emojis[result] : '🎲';
-    const gif = FUN_GIFS.roll[Math.floor(Math.random() * FUN_GIFS.roll.length)];
+    const gif = await gifService.searchGif('rolling dice dice roll lucky anime', 'roll');
 
     const embed = new EmbedBuilder()
       .setColor(0x3498db)
@@ -296,7 +282,7 @@ export const rps = {
     const choices = ['rock', 'paper', 'scissors'];
     const botChoice = choices[Math.floor(Math.random() * 3)];
     const emoji = { rock: '🪨 Rock', paper: '📄 Paper', scissors: '✂️ Scissors' };
-    const gif = FUN_GIFS.rps[Math.floor(Math.random() * FUN_GIFS.rps.length)];
+    const gif = await gifService.searchGif('rock paper scissors game duel anime', 'rps');
 
     let outcome, color;
     if (choice === botChoice) {
@@ -364,8 +350,10 @@ export const ship = {
       titleEmoji = '🖤';
     }
 
-    const gifList = percent >= 50 ? FUN_GIFS.ship.high : FUN_GIFS.ship.low;
-    const gif = gifList[Math.floor(Math.random() * gifList.length)];
+    const gif = await gifService.searchGif(
+      percent >= 50 ? 'anime couple romance hug sweet love kiss' : 'broken heart anime cry alone sad',
+      percent >= 50 ? 'love' : 'sad'
+    );
 
     const embed = new EmbedBuilder()
       .setColor(0xff69b4)
@@ -390,7 +378,7 @@ export const roast = {
       prompt: `Write a short, hilarious, savage yet PG-13 playful roast (1-2 sentences) aimed at someone named ${target.username}. Make it punchy and witty without being hateful.`,
       maxTokens: 200
     });
-    const gif = FUN_GIFS.roast[Math.floor(Math.random() * FUN_GIFS.roast.length)];
+    const gif = await gifService.searchGif('anime roast emotional damage savage laugh smug slap', 'roast');
     const embed = new EmbedBuilder()
       .setColor(0xff4500)
       .setImage(gif);
@@ -408,7 +396,7 @@ export const compliment = {
       prompt: `Write a warm, creative, genuinely uplifting compliment (1-2 sentences) for someone named ${target.username}. Make them smile!`,
       maxTokens: 200
     });
-    const gif = FUN_GIFS.compliment[Math.floor(Math.random() * FUN_GIFS.compliment.length)];
+    const gif = await gifService.searchGif('anime wholesome cute blush smile happy sweet praise', 'cute');
     const embed = new EmbedBuilder()
       .setColor(0xffb6c1)
       .setImage(gif);
@@ -572,7 +560,7 @@ export const truth = {
   description: 'Get a spicy or thought-provoking Truth question',
   async execute(interaction) {
     const question = TRUTH_QUESTIONS[Math.floor(Math.random() * TRUTH_QUESTIONS.length)];
-    const gif = FUN_GIFS.truth[Math.floor(Math.random() * FUN_GIFS.truth.length)];
+    const gif = await gifService.searchGif('anime blush nervous thinking secret truth shy', 'think');
     const embed = new EmbedBuilder()
       .setColor(0x9b59b6)
       .setTitle('🤫 Truth Challenge')
@@ -589,7 +577,7 @@ export const dare = {
   description: 'Get a bold, hilarious Dare challenge to complete',
   async execute(interaction) {
     const challenge = DARE_CHALLENGES[Math.floor(Math.random() * DARE_CHALLENGES.length)];
-    const gif = FUN_GIFS.dare[Math.floor(Math.random() * FUN_GIFS.dare.length)];
+    const gif = await gifService.searchGif('anime evil laugh smug dare challenge intense', 'smug');
     const embed = new EmbedBuilder()
       .setColor(0xe74c3c)
       .setTitle('⚡ Dare Challenge')
@@ -773,7 +761,7 @@ export const howgay = {
     const barLength = 10;
     const filled = Math.round((percent / 100) * barLength);
     const bar = '🏳️‍🌈'.repeat(filled) + '⬛'.repeat(barLength - filled);
-    const gif = FUN_GIFS.howgay[Math.floor(Math.random() * FUN_GIFS.howgay.length)];
+    const gif = await gifService.searchGif('rainbow anime sparkle colorful fabulous dance', 'dance');
 
     const embed = new EmbedBuilder()
       .setColor(0xff69b4)
@@ -799,7 +787,7 @@ export const simp = {
     const barLength = 10;
     const filled = Math.round((percent / 100) * barLength);
     const bar = '💖'.repeat(filled) + '🖤'.repeat(barLength - filled);
-    const gif = FUN_GIFS.simp[Math.floor(Math.random() * FUN_GIFS.simp.length)];
+    const gif = await gifService.searchGif('anime simp heart eyes blush worship in love', 'simp');
 
     let verdict;
     if (percent >= 90) verdict = "👑 **Supreme Simp Overlord.** Would donate their entire life savings in 0.2s.";
@@ -838,7 +826,7 @@ export const vibe = {
 
     const pick = vibes[Math.floor(Math.random() * vibes.length)];
     const score = Math.floor(Math.random() * 41) + 60; // 60-100%
-    const gif = FUN_GIFS.vibe[Math.floor(Math.random() * FUN_GIFS.vibe.length)];
+    const gif = await gifService.searchGif(`anime chill vibe aesthetic ${pick.name.toLowerCase()}`, 'vibe');
 
     const embed = new EmbedBuilder()
       .setColor(pick.color)
@@ -860,7 +848,10 @@ export const ratio = {
   async execute(interaction) {
     const target = interaction.options.getUser('user');
     const isSuccess = Math.random() < 0.65; // 65% success rate
-    const gif = FUN_GIFS.ratio[Math.floor(Math.random() * FUN_GIFS.ratio.length)];
+    const gif = await gifService.searchGif(
+      isSuccess ? 'anime ratio laugh smug point bozo dance' : 'anime counter ratio facepalm shocked cry',
+      isSuccess ? 'smug' : 'facepalm'
+    );
 
     const embed = new EmbedBuilder()
       .setColor(isSuccess ? 0x2ecc71 : 0xe74c3c)
@@ -893,7 +884,10 @@ export const iq = {
     else if (score >= 60) verdict = "🥔 **Potato Battery Level.** Occasionally forgets how to breathe.";
     else verdict = "🪨 **Room Temperature IQ.** Solid rock energy.";
 
-    const gif = score >= 110 ? FUN_GIFS.iq.high : FUN_GIFS.iq.low;
+    const gif = await gifService.searchGif(
+      score >= 110 ? 'anime big brain galaxy brain smart genius glasses' : 'anime baka dumb facepalm zero iq',
+      score >= 110 ? 'think' : 'facepalm'
+    );
 
     const embed = new EmbedBuilder()
       .setColor(score >= 110 ? 0x3498db : score >= 80 ? 0xf1c40f : 0xe74c3c)
@@ -913,7 +907,7 @@ export const affirmation = {
   description: 'Receive a boost of daily positive motivation and affirmation',
   async execute(interaction) {
     const quote = AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)];
-    const gif = FUN_GIFS.affirmation[Math.floor(Math.random() * FUN_GIFS.affirmation.length)];
+    const gif = await gifService.searchGif('anime wholesome cheer hug warm happy smile positive', 'happy');
     const embed = new EmbedBuilder()
       .setColor(0x2ecc71)
       .setImage(gif);
@@ -934,7 +928,7 @@ export const flirt = {
       prompt: `Write a sleek, dangerously charming, bold, and seductive flirty line (1-2 short sentences) directed at ${target.username}. STRICTLY IN MODERN ENGLISH. NO cheesy metaphors or cringe jokes. Make it confident, teasing, magnetic, and genuinely smooth.`,
       maxTokens: 200
     });
-    const gif = FUN_GIFS.flirt[Math.floor(Math.random() * FUN_GIFS.flirt.length)];
+    const gif = await gifService.searchGif('anime flirt wink smooth seductive blush charming attractive', 'flirt');
     const embed = new EmbedBuilder()
       .setColor(0xff2a6d)
       .setImage(gif);
@@ -952,7 +946,7 @@ export const pickup = {
   async execute(interaction) {
     const target = interaction.options.getUser('user');
     const line = PICKUP_LINES[Math.floor(Math.random() * PICKUP_LINES.length)];
-    const gif = FUN_GIFS.pickup[Math.floor(Math.random() * FUN_GIFS.pickup.length)];
+    const gif = await gifService.searchGif('anime romance flower wink smooth pickup flirt cute', 'flirt');
     const embed = new EmbedBuilder()
       .setColor(0xff69b4)
       .setImage(gif);

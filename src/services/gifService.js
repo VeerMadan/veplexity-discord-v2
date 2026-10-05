@@ -1,98 +1,251 @@
 // 🎬 DYNAMIC CONTEXTUAL GIF RESOLVER & REACTION ENGINE
+// Supports: Giphy API, Tenor v2 API, and zero-key Nekos.best (60+ live reaction categories)
 
-const CURATED_GIFS = {
+const NEKOS_ENDPOINTS = [
+  'lurk', 'shoot', 'sleep', 'clap', 'shrug', 'stare', 'wave', 'poke',
+  'confused', 'smile', 'peck', 'wink', 'sip', 'blush', 'smug', 'tickle',
+  'yeet', 'think', 'highfive', 'feed', 'wag', 'bite', 'teehee', 'shocked',
+  'bleh', 'bored', 'nom', 'nya', 'yawn', 'facepalm', 'cuddle', 'kick',
+  'happy', 'carry', 'hug', 'kabedon', 'baka', 'bonk', 'pat', 'angry',
+  'spin', 'shake', 'run', 'nod', 'nope', 'kiss', 'dance', 'punch',
+  'handshake', 'slap', 'cry', 'lappillow', 'pout', 'blowkiss', 'handhold',
+  'salute', 'thumbsup', 'laugh', 'tableflip'
+];
+
+const ACTION_ENDPOINT_MAP = {
+  hug: 'hug',
+  kiss: 'kiss',
+  slap: 'slap',
+  pat: 'pat',
+  bite: 'bite',
+  tickle: 'tickle',
+  cuddle: 'cuddle',
+  poke: 'poke',
+  bonk: 'bonk',
+  punch: 'punch',
+  blush: 'blush',
+  wink: 'wink',
+  lick: 'nom',
+  cry: 'cry',
+  summon: 'lurk',
+  shoot: 'shoot',
+  yeet: 'yeet',
+  feed: 'feed',
+  highfive: 'highfive',
+  handshake: 'handshake'
+};
+
+const SEMANTIC_KEYWORD_MAP = {
+  roast: ['smug', 'slap', 'punch', 'yeet', 'laugh', 'kick'],
+  burn: ['smug', 'yeet', 'punch'],
+  fire: ['smug', 'dance', 'yeet'],
+  laugh: ['laugh', 'teehee', 'smug'],
+  funny: ['laugh', 'teehee', 'smile'],
+  joke: ['laugh', 'wink', 'smug'],
+  flirt: ['blush', 'kiss', 'blowkiss', 'wink', 'cuddle'],
+  love: ['hug', 'kiss', 'cuddle', 'blush', 'handhold'],
+  cute: ['blush', 'smile', 'cuddle', 'pat'],
+  angry: ['angry', 'pout', 'tableflip', 'punch'],
+  mad: ['angry', 'slap', 'kick'],
+  sad: ['cry', 'pout', 'shrug'],
+  cry: ['cry'],
+  shocked: ['shocked', 'stare', 'confused'],
+  wow: ['shocked', 'happy', 'smile'],
+  confused: ['confused', 'shrug', 'think'],
+  dance: ['dance', 'spin', 'happy'],
+  party: ['dance', 'happy', 'clap'],
+  vibe: ['dance', 'smile', 'sip'],
+  bye: ['wave', 'run'],
+  smug: ['smug', 'teehee'],
+  facepalm: ['facepalm', 'nope'],
+  sleep: ['sleep', 'yawn', 'bored'],
+  think: ['think', 'stare'],
+  yes: ['nod', 'thumbsup', 'happy'],
+  no: ['nope', 'shake', 'shrug'],
+  ratio: ['smug', 'laugh', 'yeet'],
+  win: ['thumbsup', 'highfive', 'happy', 'salute'],
+  cheers: ['sip', 'highfive', 'happy'],
+  magic: ['stare', 'spin', 'lurk'],
+  summon: ['stare', 'yeet', 'run', 'lurk'],
+  popcorn: ['nom', 'smile', 'smug'],
+  coinflip: ['think', 'happy', 'shocked'],
+  roll: ['think', 'happy', 'spin'],
+  rps: ['think', 'smug', 'punch'],
+  trivia: ['think', 'confused', 'happy'],
+  '8ball': ['think', 'stare', 'smug'],
+  iq: ['think', 'smug', 'confused'],
+  simp: ['blush', 'blowkiss', 'stare'],
+  howgay: ['dance', 'sparkle', 'blush']
+};
+
+const SAFE_FALLBACK_GIFS = {
   laugh: [
     'https://media.giphy.com/media/10hO3rDNqqJ2y4/giphy.gif',
     'https://media.giphy.com/media/26n6Gx9moCgs1qxxt/giphy.gif',
-    'https://media.giphy.com/media/3oEjHAUOqG3lSS0f1C/giphy.gif',
-    'https://media.giphy.com/media/11mwI67GLeMvgA/giphy.gif'
+    'https://media.giphy.com/media/3oEjHAUOqG3lSS0f1C/giphy.gif'
   ],
   roast: [
-    'https://media.giphy.com/media/ro08ZmQ1MeqZypzgDN/giphy.gif', // Emotional damage
-    'https://media.giphy.com/media/cF7QqO5DYdft6/giphy.gif',      // Supa hot fire
-    'https://media.giphy.com/media/AiqLB6aghXEDm/giphy.gif',      // Burn explosion
-    'https://media.giphy.com/media/pQmWjYrz39YAg/giphy.gif'
-  ],
-  smirk: [
-    'https://media.giphy.com/media/B9rJsTkqAglb2/giphy.gif',
-    'https://media.giphy.com/media/y0NFayaBeiWEU/giphy.gif',
-    'https://media.giphy.com/media/DURbX7oesHiaA/giphy.gif',
-    'https://media.giphy.com/media/8fen5LSZcHQ5O/giphy.gif'
+    'https://media.giphy.com/media/ro08ZmQ1MeqZypzgDN/giphy.gif',
+    'https://media.giphy.com/media/cF7QqO5DYdft6/giphy.gif',
+    'https://media.giphy.com/media/AiqLB6aghXEDm/giphy.gif'
   ],
   flirt: [
     'https://media.giphy.com/media/B9rJsTkqAglb2/giphy.gif',
-    'https://media.giphy.com/media/y0NFayaBeiWEU/giphy.gif',
     'https://media.giphy.com/media/OpfkuToK5gvBQ8Kj3a/giphy.gif',
-    'https://media.giphy.com/media/M90mJvfWfd5mbUuULX/giphy.gif',
-    'https://media.giphy.com/media/11rI9SX0U2Z2Bl/giphy.gif'
+    'https://media.giphy.com/media/M90mJvfWfd5mbUuULX/giphy.gif'
   ],
-  crying: [
+  cry: [
     'https://media.giphy.com/media/ROF8OQvDmxRxK/giphy.gif',
-    'https://media.giphy.com/media/L95W4wv8nnb9K/giphy.gif',
-    'https://media.giphy.com/media/d2lcHJTG5Tscg/giphy.gif',
-    'https://media.giphy.com/media/BEob50R0OQ5797EGvz/giphy.gif'
+    'https://media.giphy.com/media/L95W4wv8nnb9K/giphy.gif'
   ],
-  angry: [
-    'https://media.giphy.com/media/11tTNkNy1SdXGg/giphy.gif',
-    'https://media.giphy.com/media/l1J9u3TZfpmeDLkD6/giphy.gif',
-    'https://media.giphy.com/media/NTY1kHmcLsCsg/giphy.gif',
-    'https://media.giphy.com/media/3o9bJX4O9ShW1L32eY/giphy.gif'
-  ],
-  shocked: [
-    'https://media.giphy.com/media/tfUW8mhiFk8NlJhgEh/giphy.gif',
-    'https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif',
-    'https://media.giphy.com/media/5VKbvrjxpVJCM/giphy.gif',
-    'https://media.giphy.com/media/PUBxelPJlRf0cAJs79/giphy.gif'
-  ],
-  facepalm: [
-    'https://media.giphy.com/media/3og0INyCmHlNylks9O/giphy.gif',
-    'https://media.giphy.com/media/WrNfErAnGV7Lm/giphy.gif',
-    'https://media.giphy.com/media/XsUmnRyasLGlYYawnr/giphy.gif'
-  ],
-  dance: [
+  default: [
     'https://media.giphy.com/media/jpbnoe3UIa8TU8LM13/giphy.gif',
-    'https://media.giphy.com/media/blSTtZehjAZ8I/giphy.gif',
-    'https://media.giphy.com/media/13fR00PIYwb7Gg/giphy.gif'
-  ],
-  confused: [
-    'https://media.giphy.com/media/FcuiZUneg1Sty/giphy.gif',
-    'https://media.giphy.com/media/lkdH8FmImcGoyChmUC/giphy.gif',
-    'https://media.giphy.com/media/g01ZnwAUvutuK8GIQn/giphy.gif'
-  ],
-  popcorn: [
-    'https://media.giphy.com/media/gl0mkIZOW6Nwc/giphy.gif',
-    'https://media.giphy.com/media/u5BzptR1OTZ04/giphy.gif'
-  ],
-  bye: [
-    'https://media.giphy.com/media/Ru9sLV2Yjwaw8/giphy.gif',
-    'https://media.giphy.com/media/m9eG1qVjvNINHg2Qw3/giphy.gif'
+    'https://media.giphy.com/media/10hO3rDNqqJ2y4/giphy.gif'
   ]
 };
 
-const NEKOS_MAP = {
-  laugh: 'laugh',
-  smirk: 'smug',
-  flirt: 'blush',
-  crying: 'cry',
-  dance: 'dance',
-  facepalm: 'facepalm',
-  bye: 'wave',
-  angry: 'pout',
-  shocked: 'stare'
-};
-
-const OTAKU_MAP = {
-  laugh: 'laugh',
-  smirk: 'smug',
-  flirt: 'kiss',
-  crying: 'cry',
-  dance: 'dance',
-  confused: 'confused',
-  shocked: 'shocked',
-  angry: 'slap'
-};
-
 class GifService {
+  /**
+   * Search Giphy API (if GIPHY_API_KEY is configured in .env)
+   */
+  async searchGiphy(query) {
+    const apiKey = process.env.GIPHY_API_KEY?.replace(/['"]/g, '').trim();
+    if (!apiKey) return null;
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      const url = `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=25&rating=pg-13`;
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.data?.length > 0) {
+          const item = data.data[Math.floor(Math.random() * data.data.length)];
+          return item.images?.original?.url || item.images?.downsized?.url || null;
+        }
+      }
+    } catch (e) {
+      // Ignore network timeout and fall to next tier
+    }
+    return null;
+  }
+
+  /**
+   * Search Tenor v2 API (if TENOR_API_KEY is configured in .env)
+   */
+  async searchTenor(query) {
+    const apiKey = process.env.TENOR_API_KEY?.replace(/['"]/g, '').trim();
+    if (!apiKey) return null;
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${apiKey}&limit=25`;
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.results?.length > 0) {
+          const item = data.results[Math.floor(Math.random() * data.results.length)];
+          return item.media_formats?.gif?.url || null;
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  /**
+   * Fetch a completely dynamic, non-hardcoded anime reaction GIF from Nekos.best (zero API key needed)
+   */
+  async fetchNekos(endpoint) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`https://nekos.best/api/v2/${endpoint}`, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.results?.[0]?.url) {
+          return data.results[0].url;
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  /**
+   * Universal GIF Search: Matches query dynamically across Giphy, Tenor, and Nekos.best
+   */
+  async searchGif(query, fallbackCategory = 'laugh') {
+    const cleanQuery = (query || '').trim();
+    if (!cleanQuery) return this.getFallbackGif(fallbackCategory);
+
+    // 1. Try Live Giphy Search (if key provided)
+    const giphyGif = await this.searchGiphy(cleanQuery);
+    if (giphyGif) return giphyGif;
+
+    // 2. Try Live Tenor Search (if key provided)
+    const tenorGif = await this.searchTenor(cleanQuery);
+    if (tenorGif) return tenorGif;
+
+    // 3. Dynamic Zero-Key Nekos.best Semantic Resolution
+    const nekosCategory = this.resolveSemanticCategory(cleanQuery, fallbackCategory);
+    const nekosGif = await this.fetchNekos(nekosCategory);
+    if (nekosGif) return nekosGif;
+
+    // 4. Safe fallback pool
+    return this.getFallbackGif(nekosCategory);
+  }
+
+  /**
+   * Action / Roleplay GIF fetcher (for /hug, /kiss, /slap, /pat, /action, etc.)
+   */
+  async getActionGif(action) {
+    const clean = (action || '').toLowerCase().trim();
+
+    // If Giphy/Tenor key configured, search with 50% chance for variety
+    if (process.env.GIPHY_API_KEY || process.env.TENOR_API_KEY) {
+      if (Math.random() > 0.5) {
+        const webGif = await this.searchGif(`anime ${clean}`);
+        if (webGif) return webGif;
+      }
+    }
+
+    const endpoint = ACTION_ENDPOINT_MAP[clean] || (NEKOS_ENDPOINTS.includes(clean) ? clean : 'hug');
+    const gif = await this.fetchNekos(endpoint);
+    if (gif) return gif;
+
+    return this.getFallbackGif(clean);
+  }
+
+  /**
+   * Resolve query string to appropriate Nekos.best category
+   */
+  resolveSemanticCategory(query, fallback = 'laugh') {
+    const lower = (query || '').toLowerCase().trim();
+    if (NEKOS_ENDPOINTS.includes(lower)) return lower;
+
+    for (const [key, endpoints] of Object.entries(SEMANTIC_KEYWORD_MAP)) {
+      if (lower.includes(key)) {
+        return endpoints[Math.floor(Math.random() * endpoints.length)];
+      }
+    }
+
+    return NEKOS_ENDPOINTS.includes(fallback) ? fallback : 'laugh';
+  }
+
+  /**
+   * Fallback pool in case of network timeout
+   */
+  getFallbackGif(category = 'default') {
+    const pool = SAFE_FALLBACK_GIFS[category] || SAFE_FALLBACK_GIFS.default;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
   /**
    * Extract any [gif: <category>] tag appended by AI and return clean text
    */
@@ -108,86 +261,17 @@ class GifService {
   }
 
   /**
-   * Determine appropriate gif category based on tag, user prompt, reply text, and active persona
-   */
-  detectCategory({ tag, text = '', prompt = '', mode = 'default' }) {
-    if (tag && CURATED_GIFS[tag]) return tag;
-    if (tag && NEKOS_MAP[tag]) return tag;
-
-    const combined = `${prompt} ${text}`.toLowerCase();
-
-    if (/haha|lmao|lol|rofl|😂|🤣|haste|funny|joke|chutkule|hehu/i.test(combined)) return 'laugh';
-    if (/aukat|chutiya|burn|roasted|destroyed|cook|bhadwe|loser|clown|🤡|gand|bakwas/i.test(combined)) return 'roast';
-    if (/darling|baby|janu|sweetheart|sexy|gorgeous|beautiful|cutie|flirt|kiss|hottie|bedroom|lips|love|attractive/i.test(combined)) return 'flirt';
-    if (/smirk|chaalaak|clever|shana|sly|sus|smug|😏/i.test(combined)) return 'smirk';
-    if (/gussa|angry|rage|shut up|hat|chup|pagal|teri maa|chup kar/i.test(combined)) return 'angry';
-    if (/ro mat|cry|sad|dard|dukh|pain|rona|tears|sed|😭|😢|depressed/i.test(combined)) return 'crying';
-    if (/what\b|kya\?!|omg|shocked|are you serious|wait what|damn|😱|😳|unbelievable/i.test(combined)) return 'shocked';
-    if (/facepalm|bruh|cringe|idiot|bewakoof|🤦|dimaag kharab/i.test(combined)) return 'facepalm';
-    if (/dance|party|masti|nach|vibing|celebrate|groove|💃|🕺/i.test(combined)) return 'dance';
-    if (/confused|samajh nahi|pata nahi|huh|wat|kya bol/i.test(combined)) return 'confused';
-    if (/lafda|drama|fight|popcorn|ladai/i.test(combined)) return 'popcorn';
-    if (/bye|tata|alvida|goodnight|gn|ja raha|see you/i.test(combined)) return 'bye';
-
-    // Persona-based fallback
-    if (mode === 'savage') return Math.random() > 0.5 ? 'roast' : 'smirk';
-    if (mode === 'flirty') return 'flirt';
-    if (mode === 'chill') return 'dance';
-    return Math.random() > 0.5 ? 'laugh' : 'smirk';
-  }
-
-  /**
-   * Fetch a GIF for a detected category (trying live APIs first, falling back to curated pool)
-   */
-  async fetchGif(category) {
-    // 1. Try Nekos.best API
-    const nekosAction = NEKOS_MAP[category];
-    if (nekosAction) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 1800);
-        const res = await fetch(`https://nekos.best/api/v2/${nekosAction}`, { signal: controller.signal });
-        clearTimeout(timeout);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.results?.[0]?.url) return data.results[0].url;
-        }
-      } catch (e) {}
-    }
-
-    // 2. Try OtakuGIFs API
-    const otakuAction = OTAKU_MAP[category];
-    if (otakuAction) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 1800);
-        const res = await fetch(`https://api.otakugifs.xyz/gif?reaction=${otakuAction}`, { signal: controller.signal });
-        clearTimeout(timeout);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.url) return data.url;
-        }
-      } catch (e) {}
-    }
-
-    // 3. Fallback to curated high-quality GIFs pool
-    const pool = CURATED_GIFS[category] || CURATED_GIFS.laugh;
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
-
-  /**
-   * Main method: Decide randomly whether to send a GIF and return URL or null
+   * Main AI Chatbot contextual GIF selector
    */
   async getGifForContext({ text = '', prompt = '', mode = 'default', tag = null, chance = 0.40 } = {}) {
-    // If explicit tag was sent by AI, elevate probability to 80%
-    const threshold = tag ? 0.80 : chance;
+    const threshold = tag ? 0.85 : chance;
     if (Math.random() > threshold) {
       return null;
     }
 
-    const category = this.detectCategory({ tag, text, prompt, mode });
-    const url = await this.fetchGif(category);
-    return { url, category };
+    const searchQuery = tag || `${prompt} ${text}`;
+    const url = await this.searchGif(searchQuery, mode === 'savage' ? 'smug' : 'laugh');
+    return { url, category: tag || mode };
   }
 }
 
