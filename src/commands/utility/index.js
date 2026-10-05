@@ -4,42 +4,6 @@ import { parseDuration } from '../../utils/helpers.js';
 import { deletedMessages, editedMessages } from '../../services/snipeService.js';
 import db from '../../services/database.js';
 
-export const test = {
-  name: 'test',
-  description: 'Test bot latency, uptime, and system diagnostics',
-  async execute(interaction) {
-    const client = interaction.client;
-    const uptimeSec = Math.floor(process.uptime());
-    const days = Math.floor(uptimeSec / 86400);
-    const hours = Math.floor((uptimeSec % 86400) / 3600);
-    const minutes = Math.floor((uptimeSec % 3600) / 60);
-    const seconds = uptimeSec % 60;
-    const uptimeStr = `${days > 0 ? `${days}d ` : ''}${hours > 0 ? `${hours}h ` : ''}${minutes}m ${seconds}s`;
-
-    const memUsage = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
-    const ping = client.ws.ping;
-
-    const embed = buildEmbed('System Status & Diagnostics', '⚡', 0x2ecc71, [
-      { name: '🟢 Status', value: 'Online & Fully Operational', inline: true },
-      { name: '📡 Gateway Ping', value: `${ping}ms`, inline: true },
-      { name: '⏱️ Uptime', value: uptimeStr, inline: true },
-      { name: '💾 Memory Usage', value: `${memUsage} MB`, inline: true },
-      { name: '🌐 Connected Guilds', value: `${client.guilds.cache.size}`, inline: true },
-      { name: '⚙️ Node.js', value: process.version, inline: true }
-    ]);
-
-    embed.setFooter({ text: 'VePlexity Bot Diagnostics', iconURL: client.user.displayAvatarURL() });
-
-    const bmcRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setLabel('☕ Buy Me a Coffee')
-        .setStyle(ButtonStyle.Link)
-        .setURL('https://www.buymeacoffee.com/veplexity1')
-    );
-
-    return interaction.editReply({ embeds: [embed], components: [bmcRow] });
-  }
-};
 
 export const serverinfo = {
   name: 'serverinfo',

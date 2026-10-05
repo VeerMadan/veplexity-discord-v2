@@ -237,6 +237,53 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  // 🔘 BUTTON INTERACTIONS (Music Player Controls, etc.)
+  if (interaction.isButton()) {
+    if (interaction.customId.startsWith('music_')) {
+      const queue = musicManager.getQueue(interaction.guildId);
+      if (!queue) {
+        return interaction.reply({ content: '❌ Nothing is currently playing.', ephemeral: true });
+      }
+
+      if (interaction.customId === 'music_toggle_pause') {
+        if (queue.isPaused) {
+          queue.resume();
+          return interaction.reply({ content: '▶️ Resumed audio playback.', ephemeral: true });
+        } else {
+          queue.pause();
+          return interaction.reply({ content: '⏸️ Playback paused.', ephemeral: true });
+        }
+      }
+
+      if (interaction.customId === 'music_skip') {
+        const title = queue.current?.title || 'current track';
+        queue.skip();
+        return interaction.reply({ content: `⏭️ Skipped **${title}**!`, ephemeral: true });
+      }
+
+      if (interaction.customId === 'music_stop') {
+        queue.stop();
+        return interaction.reply({ content: '⏹️ Stopped playback and cleared queue.', ephemeral: true });
+      }
+
+      if (interaction.customId === 'music_queue') {
+        const current = queue.current;
+        const upcoming = queue.tracks.slice(0, 5);
+        let desc = current ? `**Now Playing:** [${current.title}](${current.url}) (${current.duration})\n\n` : '';
+        desc += upcoming.length > 0
+          ? upcoming.map((t, i) => `**${i + 1}.** [${t.title}](${t.url}) — \`${t.duration}\``).join('\n')
+          : '_No more upcoming tracks._';
+        return interaction.reply({ content: `📜 **Queue:**\n${desc}`, ephemeral: true });
+      }
+
+      if (interaction.customId === 'music_effects_info') {
+        const active = musicManager.getActiveFilters(interaction.guildId);
+        const text = active.length > 0 ? active.join(', ') : 'None (Studio Flat / Lossless)';
+        return interaction.reply({ content: `🎛️ **Active DSP Effects:** ${text}\nUse \`/effects\` to toggle or apply presets like 8D Audio, Bass Boost, Nightcore, Vaporwave!`, ephemeral: true });
+      }
+    }
+  }
+
   // 2️⃣ CHAT INPUT COMMAND HANDLING
   if (!interaction.isChatInputCommand()) return;
 

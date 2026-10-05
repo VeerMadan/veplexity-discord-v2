@@ -1,4 +1,4 @@
-import { LavalinkManager } from 'lavalink-client';
+import { LavalinkManager, EQList } from 'lavalink-client';
 import localLibrary from './LocalLibrary.js';
 import streamResolver from './StreamResolver.js';
 import { createProgressBar, formatMs, formatSeconds } from '../../utils/helpers.js';
@@ -120,7 +120,8 @@ class MusicManager {
       resume: () => player.resume(),
       skip: () => player.skip(),
       stop: () => player.destroy(),
-      setVolume: (level) => player.setVolume(level)
+      setVolume: (level) => player.setVolume(level),
+      seek: (positionInput) => this.seek(guildId, positionInput)
     };
   }
 
@@ -200,6 +201,125 @@ class MusicManager {
     }
   }
 
+  async seek(guildId, positionInput) {
+    const player = this.getPlayer(guildId);
+    if (!player || !player.queue.current) throw new Error('Nothing is currently playing.');
+
+    let seconds = 0;
+    if (typeof positionInput === 'string' && positionInput.includes(':')) {
+      const parts = positionInput.split(':').map(Number);
+      if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
+      else if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else {
+      seconds = parseInt(positionInput, 10);
+    }
+
+    if (isNaN(seconds) || seconds < 0) {
+      throw new Error('Invalid time format. Use seconds (e.g. `90`) or `mm:ss` (e.g. `1:30`).');
+    }
+    const ms = seconds * 1000;
+    const maxMs = player.queue.current.info.length || 0;
+    if (ms > maxMs) {
+      throw new Error(`Cannot seek past track end (${formatSeconds(Math.round(maxMs / 1000))}).`);
+    }
+
+    await player.seek(ms);
+    return formatSeconds(seconds);
+  }
+
+  async setFilter(guildId, preset) {
+    const player = this.getPlayer(guildId);
+    if (!player) throw new Error('No active music player in this server. Use `/play` first!');
+
+    switch (preset.toLowerCase()) {
+      case '8d': {
+        const next = !player.filterManager.filters.rotation;
+        await player.filterManager.toggleRotation(0.2);
+        return { name: '🎧 8D Audio (Binaural Rotation)', active: next };
+      }
+      case 'bass_low': {
+        await player.filterManager.setEQ(EQList.BassboostLow);
+        return { name: '🔊 Bass Boost - Subtle (+5dB)', active: true };
+      }
+      case 'bass_medium': {
+        await player.filterManager.setEQ(EQList.BassboostMedium);
+        return { name: '🔊 Bass Boost - Medium (+10dB)', active: true };
+      }
+      case 'bass_high': {
+        await player.filterManager.setEQ(EQList.BassboostHigh);
+        return { name: '🔊 Bass Boost - Heavy (+15dB)', active: true };
+      }
+      case 'bass_extreme': {
+        await player.filterManager.setEQ(EQList.BassboostEarrape);
+        return { name: '💥 Bass Boost - Extreme (Ear-Rape)', active: true };
+      }
+      case 'nightcore': {
+        const next = !player.filterManager.filters.nightcore;
+        await player.filterManager.toggleNightcore();
+        return { name: '⚡ Nightcore (Speed & Pitch Up)', active: next };
+      }
+      case 'vaporwave': {
+        const next = !player.filterManager.filters.vaporwave;
+        await player.filterManager.toggleVaporwave();
+        return { name: '🌸 Vaporwave (Slow & Lo-Fi)', active: next };
+      }
+      case 'karaoke': {
+        const next = !player.filterManager.filters.karaoke;
+        await player.filterManager.toggleKaraoke();
+        return { name: '🎤 Karaoke (Vocal Suppression)', active: next };
+      }
+      case 'tremolo': {
+        const next = !player.filterManager.filters.tremolo;
+        await player.filterManager.toggleTremolo(4, 0.75);
+        return { name: '〰️ Tremolo (Volume Oscillation)', active: next };
+      }
+      case 'vibrato': {
+        const next = !player.filterManager.filters.vibrato;
+        await player.filterManager.toggleVibrato(4, 0.75);
+        return { name: '🌊 Vibrato (Pitch Wobble)', active: next };
+      }
+      case 'lowpass': {
+        const next = !player.filterManager.filters.lowPass;
+        await player.filterManager.toggleLowPass(20);
+        return { name: '📻 Low Pass / Muffled Chill', active: next };
+      }
+      case 'pop': {
+        await player.filterManager.setEQ(EQList.Pop);
+        return { name: '🎵 Pop Equalizer', active: true };
+      }
+      case 'rock': {
+        await player.filterManager.setEQ(EQList.Rock);
+        return { name: '🎸 Rock Equalizer', active: true };
+      }
+      case 'electronic': {
+        await player.filterManager.setEQ(EQList.Electronic);
+        return { name: '🎛️ Electronic Equalizer', active: true };
+      }
+      case 'clear':
+      case 'reset': {
+        await player.filterManager.resetFilters();
+        return { name: 'All Audio Effects Cleared (Studio Lossless)', active: false };
+      }
+      default:
+        throw new Error(`Unknown audio effect: ${preset}`);
+    }
+  }
+
+  getActiveFilters(guildId) {
+    const player = this.getPlayer(guildId);
+    if (!player) return [];
+    const active = [];
+    if (player.filterManager?.filters?.rotation) active.push('🎧 8D Audio');
+    if (player.filterManager?.filters?.nightcore) active.push('⚡ Nightcore');
+    if (player.filterManager?.filters?.vaporwave) active.push('🌸 Vaporwave');
+    if (player.filterManager?.filters?.karaoke) active.push('🎤 Karaoke');
+    if (player.filterManager?.filters?.tremolo) active.push('〰️ Tremolo');
+    if (player.filterManager?.filters?.vibrato) active.push('🌊 Vibrato');
+    if (player.filterManager?.filters?.lowPass) active.push('📻 Low Pass');
+    if (player.filterManager?.equalizerBands?.length > 0) active.push('🔊 EQ / Bass Boost');
+    return active;
+  }
+
   getNowPlayingDisplay(guildId) {
     const player = this.getPlayer(guildId);
     if (!player || !player.queue.current) return null;
@@ -208,6 +328,7 @@ class MusicManager {
     const currentMs = player.position || 0;
     const totalMs = track.info.length || 0;
     const bar = createProgressBar(currentMs, totalMs, 18);
+    const activeFilters = this.getActiveFilters(guildId);
 
     return {
       title: track.info.title,
@@ -222,6 +343,7 @@ class MusicManager {
       isPaused: player.paused,
       volume: player.volume,
       repeatMode: player.repeatMode || 'off',
+      activeEffects: activeFilters.length > 0 ? activeFilters.join(', ') : 'None (Studio Flat)',
       is247: false
     };
   }
@@ -229,3 +351,4 @@ class MusicManager {
 
 export const musicManager = new MusicManager();
 export default musicManager;
+

@@ -69,27 +69,48 @@ export const pat = { name: 'pat', description: 'Pat someone on the head', option
 export const hug = { name: 'hug', description: 'Give someone a warm hug', options: [{ name: 'user', description: 'Who to hug', type: 6, required: true }], execute: (i) => handleAction(i, 'hug') };
 export const kiss = { name: 'kiss', description: 'Kiss someone sweetly', options: [{ name: 'user', description: 'Who to kiss', type: 6, required: true }], execute: (i) => handleAction(i, 'kiss') };
 export const slap = { name: 'slap', description: 'Slap someone across the face', options: [{ name: 'user', description: 'Who to slap', type: 6, required: true }], execute: (i) => handleAction(i, 'slap') };
-export const bite = { name: 'bite', description: 'Bite someone playfully', options: [{ name: 'user', description: 'Who to bite', type: 6, required: true }], execute: (i) => handleAction(i, 'bite') };
-export const tickle = { name: 'tickle', description: 'Tickle someone until they laugh', options: [{ name: 'user', description: 'Who to tickle', type: 6, required: true }], execute: (i) => handleAction(i, 'tickle') };
-export const cuddle = { name: 'cuddle', description: 'Cuddle up with someone', options: [{ name: 'user', description: 'Who to cuddle', type: 6, required: true }], execute: (i) => handleAction(i, 'cuddle') };
-export const poke = { name: 'poke', description: 'Poke someone gently', options: [{ name: 'user', description: 'Who to poke', type: 6, required: true }], execute: (i) => handleAction(i, 'poke') };
-export const bonk = { name: 'bonk', description: 'Bonk someone into horny jail', options: [{ name: 'user', description: 'Who to bonk', type: 6, required: true }], execute: (i) => handleAction(i, 'bonk') };
-export const punch = { name: 'punch', description: 'Throw a punch at someone', options: [{ name: 'user', description: 'Who to punch', type: 6, required: true }], execute: (i) => handleAction(i, 'punch') };
-export const blush = { name: 'blush', description: 'Blush at someone special', options: [{ name: 'user', description: 'Who makes you blush', type: 6, required: true }], execute: (i) => handleAction(i, 'blush') };
-export const wink = { name: 'wink', description: 'Wink playfully at someone', options: [{ name: 'user', description: 'Who to wink at', type: 6, required: true }], execute: (i) => handleAction(i, 'wink') };
-export const lick = { name: 'lick', description: 'Lick someone playfully', options: [{ name: 'user', description: 'Who to lick', type: 6, required: true }], execute: (i) => handleAction(i, 'lick') };
 
-export const cry = {
-  name: 'cry',
-  description: 'Express your sadness with a dramatic crying GIF',
+export const action = {
+  name: 'action',
+  description: 'Perform an expressive anime reaction or action',
+  options: [
+    {
+      name: 'type',
+      description: 'The action/reaction to perform',
+      type: 3,
+      required: true,
+      choices: [
+        { name: '💖 Cuddle', value: 'cuddle' },
+        { name: '😳 Blush', value: 'blush' },
+        { name: '😉 Wink', value: 'wink' },
+        { name: '🔨 Bonk', value: 'bonk' },
+        { name: '👊 Punch', value: 'punch' },
+        { name: '👅 Lick', value: 'lick' },
+        { name: '🦷 Bite', value: 'bite' },
+        { name: '👉 Poke', value: 'poke' },
+        { name: '😂 Tickle', value: 'tickle' },
+        { name: '😭 Cry', value: 'cry' }
+      ]
+    },
+    {
+      name: 'user',
+      description: 'The user to interact with (optional for solo actions like cry)',
+      type: 6,
+      required: false
+    }
+  ],
   async execute(interaction) {
-    const gifs = FALLBACK_ACTION_GIFS.cry;
-    const gif = gifs[Math.floor(Math.random() * gifs.length)];
-    const embed = new EmbedBuilder()
-      .setColor(0x3498db)
-      .setDescription(`😭 **<@${interaction.user.id}> is crying... someone give them a hug!**`)
-      .setImage(gif);
-    return interaction.editReply({ embeds: [embed] });
+    const type = interaction.options.getString('type');
+    if (type === 'cry') {
+      const gifs = FALLBACK_ACTION_GIFS.cry;
+      const gif = gifs[Math.floor(Math.random() * gifs.length)];
+      const embed = new EmbedBuilder()
+        .setColor(0x3498db)
+        .setDescription(`😭 **<@${interaction.user.id}> is crying... someone give them a hug!**`)
+        .setImage(gif);
+      return interaction.editReply({ embeds: [embed] });
+    }
+    return handleAction(interaction, type);
   }
 };
 

@@ -31,13 +31,13 @@ const rest = new REST({ version: '10' }).setToken(TOKEN);
         { body: commandsData }
       );
       console.log(`✅ Successfully registered ${commandsData.length} guild commands to guild ${GUILD_ID}!`);
-    } else {
-      await rest.put(
-        Routes.applicationCommands(CLIENT_ID),
-        { body: commandsData }
-      );
-      console.log(`✅ Successfully registered ${commandsData.length} global commands!`);
     }
+
+    await rest.put(
+      Routes.applicationCommands(CLIENT_ID),
+      { body: commandsData }
+    );
+    console.log(`✅ Successfully registered ${commandsData.length} global commands!`);
   } catch (error) {
     console.error('❌ Failed to register commands:', error);
   }
