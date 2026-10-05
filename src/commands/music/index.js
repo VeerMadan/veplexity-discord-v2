@@ -77,32 +77,92 @@ export const music = {
 
   async autocomplete(interaction) {
     const focused = interaction.options.getFocused();
-    const query = (focused || '').trim();
+    const rawQuery = (focused || '').trim();
 
-    // 1. Search local studio library first
-    const localMatches = localLibrary.search(query, 15);
-    const suggestions = localMatches.map(song => ({
-      name: `🎵 ${song.title} - ${song.author} [${song.format}]`.slice(0, 100),
-      value: song.id || song.title.slice(0, 100)
-    }));
+    if (!rawQuery) {
+      // Show sample of local studio master library when query is empty
+      const sample = localLibrary.search('', 15).map(song => ({
+        name: `📁 ${song.title} - ${song.author} [24-bit FLAC]`.slice(0, 100),
+        value: song.id
+      }));
+      return interaction.respond(sample.slice(0, 25)).catch(() => {});
+    }
 
-    if (suggestions.length >= 10 || (query.length < 3 && suggestions.length > 0)) {
+    const isExplicitYt = rawQuery.toLowerCase().startsWith('yt:') || rawQuery.toLowerCase().startsWith('youtube:');
+    const isExplicitLocal = rawQuery.toLowerCase().startsWith('local:') || rawQuery.toLowerCase().startsWith('flac:');
+    const cleanQuery = rawQuery.replace(/^(yt|youtube|local|flac):/i, '').trim() || rawQuery;
+
+    const suggestions = [];
+
+    // 1. If user explicitly wants local library: show up to 25 local tracks
+    if (isExplicitLocal) {
+      const localMatches = localLibrary.search(cleanQuery, 25);
+      for (const song of localMatches) {
+        suggestions.push({
+          name: `📁 ${song.title} - ${song.author} [24-bit FLAC]`.slice(0, 100),
+          value: song.id
+        });
+      }
       return interaction.respond(suggestions.slice(0, 25)).catch(() => {});
     }
 
-    // 2. Fallback to online search if local results are few and query length >= 3
-    if (query.length >= 3 && !query.startsWith('http')) {
+    // 2. If user explicitly wants YouTube: show up to 25 YouTube tracks
+    if (isExplicitYt) {
       try {
-        const ytResults = await streamResolver.searchYouTube(query, 5);
+        const ytResults = await Promise.race([
+          streamResolver.searchYouTube(cleanQuery, 25),
+          new Promise(res => setTimeout(() => res([]), 2200))
+        ]);
+        for (const t of ytResults) {
+          suggestions.push({
+            name: `🌐 ${t.title} - ${t.author} [YouTube]`.slice(0, 100),
+            value: t.url.slice(0, 100)
+          });
+        }
+      } catch (e) {}
+      return interaction.respond(suggestions.slice(0, 25)).catch(() => {});
+    }
+
+    // 3. Balanced Search (Shows BOTH 📁 [24-bit FLAC] AND 🌐 [YouTube])
+    // Take top 4 highest-matching local tracks so YouTube results appear prominently in top view
+    const localMatches = localLibrary.search(cleanQuery, 4);
+    for (const song of localMatches) {
+      suggestions.push({
+        name: `📁 ${song.title} - ${song.author} [24-bit FLAC]`.slice(0, 100),
+        value: song.id
+      });
+    }
+
+    // Official YouTube Web Search (fetches up to 15 results)
+    if (cleanQuery.length >= 2 && !cleanQuery.startsWith('http')) {
+      try {
+        const remainingSlots = Math.min(15, 25 - suggestions.length);
+        const ytResults = await Promise.race([
+          streamResolver.searchYouTube(cleanQuery, remainingSlots),
+          new Promise(res => setTimeout(() => res([]), 2200))
+        ]);
+
         for (const t of ytResults) {
           if (suggestions.length < 25) {
             suggestions.push({
-              name: `🌐 ${t.title} - ${t.author}`.slice(0, 100),
+              name: `🌐 ${t.title} - ${t.author} [YouTube]`.slice(0, 100),
               value: t.url.slice(0, 100)
             });
           }
         }
       } catch (e) {}
+    }
+
+    // If local had more matches beyond the initial 4 and slots remain, append them
+    if (suggestions.length < 25) {
+      const moreLocal = localLibrary.search(cleanQuery, 25).slice(4);
+      for (const song of moreLocal) {
+        if (suggestions.length >= 25) break;
+        suggestions.push({
+          name: `📁 ${song.title} - ${song.author} [24-bit FLAC]`.slice(0, 100),
+          value: song.id
+        });
+      }
     }
 
     return interaction.respond(suggestions.slice(0, 25)).catch(() => {});

@@ -122,33 +122,41 @@ class LocalLibraryService {
       .map(song => {
         const titleLower = song.title.toLowerCase();
         const authorLower = song.author.toLowerCase();
-        const fullCombo = `${authorLower} ${titleLower} ${path.basename(song.filePath).toLowerCase()}`;
+        const baseName = path.basename(song.filePath).toLowerCase();
+        const fullCombo = `${authorLower} ${titleLower} ${baseName}`;
         let score = 0;
 
         // Exact matches
-        if (titleLower === clean) score += 120;
-        else if (titleLower.startsWith(clean)) score += 80;
+        if (titleLower === clean) score += 150;
+        else if (titleLower.startsWith(clean)) score += 90;
         else if (titleLower.includes(clean)) score += 50;
 
-        if (authorLower === clean) score += 90;
-        else if (authorLower.startsWith(clean)) score += 60;
+        if (authorLower === clean) score += 100;
+        else if (authorLower.startsWith(clean)) score += 70;
         else if (authorLower.includes(clean)) score += 40;
 
-        if (fullCombo.includes(clean)) score += 70;
+        if (fullCombo.includes(clean)) score += 40;
 
-        // Multi-word token match (e.g. "Alan Walker On My Way")
+        // Multi-word token match with word boundary check
         if (queryWords.length > 1) {
-          const matchedWords = queryWords.filter(word => fullCombo.includes(word));
-          if (matchedWords.length === queryWords.length) {
-            score += 100;
-          } else if (matchedWords.length > 0) {
-            score += Math.round((matchedWords.length / queryWords.length) * 50);
+          let matchedCount = 0;
+          for (const word of queryWords) {
+            const wordRegex = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
+            if (wordRegex.test(fullCombo)) {
+              matchedCount++;
+            }
+          }
+
+          if (matchedCount === queryWords.length) {
+            score += 120;
+          } else if (matchedCount > 1 && matchedCount >= Math.ceil(queryWords.length * 0.6)) {
+            score += Math.round((matchedCount / queryWords.length) * 60);
           }
         }
 
         return { song, score };
       })
-      .filter(item => item.score > 0)
+      .filter(item => item.score >= 35)
       .sort((a, b) => b.score - a.score)
       .map(item => item.song)
       .slice(0, limit);
