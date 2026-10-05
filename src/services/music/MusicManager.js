@@ -53,9 +53,10 @@ class MusicManager {
       console.log(`[Lavalink] 🔊 trackStart on guild ${player.guildId}: ${track.info.title}`);
       player.set('lastTrack', track);
 
-      // Prevent duplicate message if already replied by /play slash command
-      if (player.get('skipNextAnnouncement')) {
-        player.set('skipNextAnnouncement', false);
+      // Prevent duplicate message if already announced by /play slash command
+      const trackIdentifier = track.info.identifier || track.info.uri || track.info.title;
+      if (player.get('suppressAnnouncementFor') === trackIdentifier) {
+        player.set('suppressAnnouncementFor', null);
         return;
       }
 
@@ -234,6 +235,11 @@ class MusicManager {
         const isQueueEmpty = player.queue.tracks.length === 0 && !player.queue.current;
         await player.queue.add(track);
 
+        const trackIdentifier = track.info.identifier || track.info.uri || track.info.title;
+        if (isQueueEmpty) {
+          player.set('suppressAnnouncementFor', trackIdentifier);
+        }
+
         if (!player.playing && !player.paused) {
           await player.play();
         }
@@ -241,7 +247,6 @@ class MusicManager {
         const isLocal = track.info.sourceName === 'local';
         const tag = isLocal ? '📁 [24-bit FLAC]' : '🌐 [YouTube]';
         if (isQueueEmpty) {
-          player.set('skipNextAnnouncement', true);
           return interaction.editReply(`🎶 Now playing: **${track.info.title}** by **${track.info.author}** ${tag}`);
         } else {
           return interaction.editReply(`📝 Enqueued (#${player.queue.tracks.length}): **${track.info.title}** ${tag}`);
