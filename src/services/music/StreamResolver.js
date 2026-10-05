@@ -349,16 +349,19 @@ class StreamResolverService {
       '-i', inputSource
     );
 
+    const filters = ['aresample=resampler=soxr:precision=28:osr=48000:cutoff=0.99'];
     if (volume !== 1.0 && volume > 0) {
-      ffmpegArgs.push('-af', `volume=${volume}`);
+      filters.push(`volume=${volume}`);
     }
+    ffmpegArgs.push('-af', filters.join(','));
 
     ffmpegArgs.push(
       '-c:a', 'libopus',
-      '-b:a', '192k',
+      '-b:a', '320k',
       '-vbr', 'on',
       '-compression_level', '10',
       '-application', 'audio',
+      '-frame_duration', '20',
       '-page_duration', '20000',
       '-f', 'opus',
       '-ar', '48000',

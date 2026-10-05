@@ -128,6 +128,18 @@ class GuildQueue {
 
     console.log(`[MusicQueue ${this.guildId}] 🔌 Joining voice channel ${this.voiceChannel.id}...`);
 
+    // Auto-boost channel bitrate to server maximum for lossless audiophile music playback
+    try {
+      const maxBitrate = this.voiceChannel.guild?.maximumBitrate || 96000;
+      if (this.voiceChannel.bitrate < maxBitrate && this.voiceChannel.manageable) {
+        const oldBitrate = this.voiceChannel.bitrate;
+        await this.voiceChannel.setBitrate(maxBitrate, 'VePlexity Studio Music Auto-Boost');
+        console.log(`[MusicQueue ${this.guildId}] 🚀 Auto-boosted voice channel bitrate: ${oldBitrate / 1000}kbps -> ${maxBitrate / 1000}kbps`);
+      }
+    } catch (bitrateErr) {
+      console.warn(`[MusicQueue ${this.guildId}] Could not auto-boost channel bitrate:`, bitrateErr.message);
+    }
+
     this.connection = joinVoiceChannel({
       channelId: this.voiceChannel.id,
       guildId: this.guildId,
