@@ -2,11 +2,12 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import musicManager from '../../services/music/MusicManager.js';
 import streamResolver from '../../services/music/StreamResolver.js';
 import localLibrary from '../../services/music/LocalLibrary.js';
+import lyricsService from '../../services/music/LyricsService.js';
 import { buildEmbed } from '../../utils/embeds.js';
 
-// ─── HELPER: MUSIC CONTROLS BUTTON ROW ───────────────────────────────────────
-function createMusicControlsRow(isPaused = false) {
-  return new ActionRowBuilder().addComponents(
+// ─── HELPER: MUSIC CONTROLS BUTTON ROWS ──────────────────────────────────────
+function createMusicControlsRow(isPaused = false, isAutoplay = false) {
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('music_toggle_pause')
       .setLabel(isPaused ? 'Resume' : 'Pause')
@@ -33,6 +34,36 @@ function createMusicControlsRow(isPaused = false) {
       .setEmoji('🎛️')
       .setStyle(ButtonStyle.Secondary)
   );
+
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('music_lyrics')
+      .setLabel('Lyrics')
+      .setEmoji('📜')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('music_autoplay')
+      .setLabel(isAutoplay ? 'Radio: ON' : 'Radio: OFF')
+      .setEmoji('📻')
+      .setStyle(isAutoplay ? ButtonStyle.Success : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('music_vol_down')
+      .setLabel('-10%')
+      .setEmoji('🔉')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('music_vol_up')
+      .setLabel('+10%')
+      .setEmoji('🔊')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('music_refresh')
+      .setLabel('Refresh')
+      .setEmoji('🔄')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  return [row1, row2];
 }
 
 // ─── 1. /play COMMAND ────────────────────────────────────────────────────────
@@ -242,6 +273,7 @@ export const nowplaying = {
       { name: 'Audio Quality', value: isFlac ? '💎 FLAC 24-bit Lossless Studio' : '🔊 Opus 48kHz Stereo', inline: true },
       { name: 'Progress', value: `\`${info.currentFormatted}\` ${info.progressBar} \`${info.totalFormatted}\``, inline: false },
       { name: 'Active Effects', value: `\`${info.activeEffects}\``, inline: true },
+      { name: 'Radio Mode', value: info.isAutoplay ? '🟢 **Active (Endless Tracks)**' : '⚪ Disabled', inline: true },
       { name: 'Settings', value: `🔊 Volume: **${info.volume}%** | 🔁 Loop: **${info.repeatMode}**`, inline: true }
     ]);
 
@@ -249,8 +281,8 @@ export const nowplaying = {
       embed.setThumbnail(info.thumbnail);
     }
 
-    const row = createMusicControlsRow(info.isPaused);
-    return interaction.editReply({ embeds: [embed], components: [row] });
+    const rows = createMusicControlsRow(info.isPaused, info.isAutoplay);
+    return interaction.editReply({ embeds: [embed], components: rows });
   }
 };
 
@@ -381,6 +413,47 @@ export const library = {
       { name: search ? `Search Results ("${search}")` : 'Featured Tracks', value: desc, inline: false },
       { name: '💡 How to Play', value: 'Use `/play song:<title>` and select any track from the instant autocomplete list!', inline: false }
     ]);
+    return interaction.editReply({ embeds: [embed] });
+  }
+};
+
+// ─── 12. /lyrics COMMAND ────────────────────────────────────────────────────
+export const lyrics = {
+  name: 'lyrics',
+  description: 'Search and display live synchronized or plain lyrics for any song',
+  options: [
+    {
+      name: 'song',
+      description: 'Song title and artist (defaults to currently playing track)',
+      type: 3,
+      required: false
+    }
+  ],
+  async execute(interaction) {
+    let query = interaction.options.getString('song');
+    if (!query) {
+      const q = musicManager.getQueue(interaction.guildId);
+      if (!q || !q.current) {
+        return interaction.editReply('❌ Nothing is playing right now. Specify a song: `/lyrics song:Shape of You`');
+      }
+      query = `${q.current.title} ${q.current.author || ''}`.trim();
+    }
+
+    const data = await lyricsService.getLyrics({ title: query });
+    if (!data || !data.lyrics) {
+      return interaction.editReply(`❌ Could not find lyrics for **"${query}"**.`);
+    }
+
+    const text = data.lyrics.length > 4000 ? data.lyrics.slice(0, 3990) + '\n\n*...[Lyrics truncated]*' : data.lyrics;
+
+    const embed = new EmbedBuilder()
+      .setColor(0x1db954)
+      .setTitle(`📜 Lyrics: ${data.title}`)
+      .setAuthor({ name: data.artist || 'Unknown Artist' })
+      .setDescription(text)
+      .setFooter({ text: 'Live Lyrics Engine • Powered by LRCLIB' })
+      .setTimestamp();
+
     return interaction.editReply({ embeds: [embed] });
   }
 };

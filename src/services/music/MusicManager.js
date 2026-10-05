@@ -51,6 +51,7 @@ class MusicManager {
 
     this.lavalink.on('trackStart', (player, track) => {
       console.log(`[Lavalink] 🔊 trackStart on guild ${player.guildId}: ${track.info.title}`);
+      player.set('lastTrack', track);
       if (player.textChannelId && this.client) {
         const channel = this.client.channels.cache.get(player.textChannelId);
         if (channel) {
@@ -61,8 +62,31 @@ class MusicManager {
       }
     });
 
-    this.lavalink.on('queueEnd', (player) => {
+    this.lavalink.on('queueEnd', async (player) => {
       console.log(`[Lavalink] ⏹️ Queue ended on guild ${player.guildId}`);
+      if (player.get('autoplay')) {
+        const lastTrack = player.get('lastTrack');
+        if (lastTrack && lastTrack.info) {
+          try {
+            console.log(`[Autoplay] Finding radio track related to: ${lastTrack.info.title}`);
+            const query = `ytsearch:${lastTrack.info.author} popular music`;
+            const res = await this.lavalink.search({ query, source: 'youtube' }, player.node);
+            if (res?.tracks?.length > 0) {
+              const candidate = res.tracks.find(t => t.info.title.toLowerCase() !== lastTrack.info.title.toLowerCase()) || res.tracks[0];
+              if (candidate) {
+                await player.queue.add(candidate);
+                await player.play();
+                if (player.textChannelId && this.client) {
+                  const channel = this.client.channels.cache.get(player.textChannelId);
+                  channel?.send(`📻 **Endless Radio:** Auto-queued **${candidate.info.title}** by **${candidate.info.author}** ✨`).catch(() => null);
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[Autoplay Error]', e.message);
+          }
+        }
+      }
     });
 
     this.lavalink.on('playerError', (player, error) => {
@@ -320,6 +344,19 @@ class MusicManager {
     return active;
   }
 
+  toggleAutoplay(guildId) {
+    const player = this.getPlayer(guildId);
+    if (!player) return false;
+    const current = !!player.get('autoplay');
+    player.set('autoplay', !current);
+    return !current;
+  }
+
+  isAutoplay(guildId) {
+    const player = this.getPlayer(guildId);
+    return !!player?.get('autoplay');
+  }
+
   getNowPlayingDisplay(guildId) {
     const player = this.getPlayer(guildId);
     if (!player || !player.queue.current) return null;
@@ -344,6 +381,7 @@ class MusicManager {
       volume: player.volume,
       repeatMode: player.repeatMode || 'off',
       activeEffects: activeFilters.length > 0 ? activeFilters.join(', ') : 'None (Studio Flat)',
+      isAutoplay: !!player.get('autoplay'),
       is247: false
     };
   }

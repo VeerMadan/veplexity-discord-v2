@@ -263,22 +263,79 @@ export const roll = {
 
 export const rps = {
   name: 'rps',
-  description: 'Challenge VePlexity Bot to Rock, Paper, Scissors',
+  description: 'Play Rock, Paper, Scissors against the bot or duel another player',
   options: [
     {
       name: 'choice',
-      description: 'Your chosen weapon',
+      description: 'Your weapon against the bot (rock, paper, scissors)',
       type: 3,
-      required: true,
+      required: false,
       choices: [
         { name: 'Rock 🪨', value: 'rock' },
         { name: 'Paper 📄', value: 'paper' },
         { name: 'Scissors ✂️', value: 'scissors' }
       ]
+    },
+    {
+      name: 'opponent',
+      description: 'Challenge a specific user to an interactive duel with secret buttons',
+      type: 6,
+      required: false
     }
   ],
   async execute(interaction) {
-    const choice = interaction.options.getString('choice');
+    const opponent = interaction.options.getUser('opponent');
+
+    // ── MULTIPLAYER DUEL ──
+    if (opponent) {
+      if (opponent.bot) return interaction.editReply("❌ You can't challenge a bot to a duel.");
+      if (opponent.id === interaction.user.id) return interaction.editReply("❌ You can't challenge yourself.");
+
+      const choices = {};
+      const emoji = { rock: '🪨', paper: '📄', scissors: '✂️' };
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('rps_rock').setLabel('Rock 🪨').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('rps_paper').setLabel('Paper 📄').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('rps_scissors').setLabel('Scissors ✂️').setStyle(ButtonStyle.Secondary)
+      );
+      const msg = await interaction.editReply({
+        content: `⚔️ <@${interaction.user.id}> challenges <@${opponent.id}> to RPS! Both players click your move below.`,
+        components: [row]
+      });
+      const collector = msg.createMessageComponentCollector({ time: 60000 });
+
+      collector.on('collect', async (btn) => {
+        if (![interaction.user.id, opponent.id].includes(btn.user.id)) {
+          return btn.reply({ content: "❌ This isn't your duel.", ephemeral: true });
+        }
+        if (choices[btn.user.id]) return btn.reply({ content: '✅ You already picked.', ephemeral: true });
+        choices[btn.user.id] = btn.customId.replace('rps_', '');
+        await btn.reply({ content: `You picked ${emoji[choices[btn.user.id]]} ${choices[btn.user.id]}!`, ephemeral: true });
+
+        if (Object.keys(choices).length === 2) {
+          const p1 = interaction.user.id, p2 = opponent.id;
+          const c1 = choices[p1], c2 = choices[p2];
+          let result;
+          if (c1 === c2) result = "🤝 It's a tie!";
+          else if ((c1 === 'rock' && c2 === 'scissors') || (c1 === 'paper' && c2 === 'rock') || (c1 === 'scissors' && c2 === 'paper')) result = `🏆 <@${p1}> wins!`;
+          else result = `🏆 <@${p2}> wins!`;
+          await interaction.editReply({
+            content: `⚔️ **Results:**\n<@${p1}>: ${emoji[c1]} ${c1}\n<@${p2}>: ${emoji[c2]} ${c2}\n\n${result}`,
+            components: []
+          });
+          collector.stop();
+        }
+      });
+      collector.on('end', (collected, reason) => {
+        if (reason === 'time' && Object.keys(choices).length < 2) {
+          interaction.editReply({ content: "⏱️ Duel timed out — someone didn't pick in time.", components: [] }).catch(() => null);
+        }
+      });
+      return;
+    }
+
+    // ── SOLO VS BOT ──
+    const choice = interaction.options.getString('choice') || ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
     const choices = ['rock', 'paper', 'scissors'];
     const botChoice = choices[Math.floor(Math.random() * 3)];
     const emoji = { rock: '🪨 Rock', paper: '📄 Paper', scissors: '✂️ Scissors' };
@@ -1129,57 +1186,7 @@ export const connect4 = {
   }
 };
 
-export const rpsduel = {
-  name: 'rpsduel',
-  description: 'Challenge someone to a 2-player secret Rock Paper Scissors duel',
-  options: [{ name: 'opponent', description: 'Who to challenge', type: 6, required: true }],
-  async execute(interaction) {
-    const opponent = interaction.options.getUser('opponent');
-    if (opponent.bot) return interaction.editReply("❌ You can't challenge a bot.");
-    if (opponent.id === interaction.user.id) return interaction.editReply("❌ You can't challenge yourself.");
 
-    const choices = {};
-    const emoji = { rock: '🪨', paper: '📄', scissors: '✂️' };
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('rpsd_rock').setLabel('Rock 🪨').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('rpsd_paper').setLabel('Paper 📄').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('rpsd_scissors').setLabel('Scissors ✂️').setStyle(ButtonStyle.Secondary)
-    );
-    const msg = await interaction.editReply({
-      content: `⚔️ <@${interaction.user.id}> challenges <@${opponent.id}> to RPS! Both players click your move below.`,
-      components: [row]
-    });
-    const collector = msg.createMessageComponentCollector({ time: 60000 });
-
-    collector.on('collect', async (btn) => {
-      if (![interaction.user.id, opponent.id].includes(btn.user.id)) {
-        return btn.reply({ content: "❌ This isn't your duel.", ephemeral: true });
-      }
-      if (choices[btn.user.id]) return btn.reply({ content: '✅ You already picked.', ephemeral: true });
-      choices[btn.user.id] = btn.customId.split('_')[1];
-      await btn.reply({ content: `You picked ${emoji[choices[btn.user.id]]} ${choices[btn.user.id]}!`, ephemeral: true });
-
-      if (Object.keys(choices).length === 2) {
-        const p1 = interaction.user.id, p2 = opponent.id;
-        const c1 = choices[p1], c2 = choices[p2];
-        let result;
-        if (c1 === c2) result = "🤝 It's a tie!";
-        else if ((c1 === 'rock' && c2 === 'scissors') || (c1 === 'paper' && c2 === 'rock') || (c1 === 'scissors' && c2 === 'paper')) result = `🏆 <@${p1}> wins!`;
-        else result = `🏆 <@${p2}> wins!`;
-        await interaction.editReply({
-          content: `⚔️ **Results:**\n<@${p1}>: ${emoji[c1]} ${c1}\n<@${p2}>: ${emoji[c2]} ${c2}\n\n${result}`,
-          components: []
-        });
-        collector.stop();
-      }
-    });
-    collector.on('end', (collected, reason) => {
-      if (reason === 'time' && Object.keys(choices).length < 2) {
-        interaction.editReply({ content: '⏱️ Duel timed out — someone didn\'t pick in time.', components: [] }).catch(() => null);
-      }
-    });
-  }
-};
 
 export const filter = {
   name: 'filter',

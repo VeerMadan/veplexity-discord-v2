@@ -12,6 +12,7 @@ import musicManager from './src/services/music/MusicManager.js';
 import { generateAiReply } from './src/services/aiService.js';
 import { deletedMessages, editedMessages } from './src/services/snipeService.js';
 import gifService from './src/services/gifService.js';
+import lyricsService from './src/services/music/LyricsService.js';
 
 // 🔧 Network & Process Configuration
 if (ffmpeg) process.env.FFMPEG_PATH = ffmpeg;
@@ -30,6 +31,7 @@ process.on('uncaughtException', (err) => {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
@@ -281,6 +283,53 @@ client.on('interactionCreate', async (interaction) => {
         const text = active.length > 0 ? active.join(', ') : 'None (Studio Flat / Lossless)';
         return interaction.reply({ content: `🎛️ **Active DSP Effects:** ${text}\nUse \`/effects\` to toggle or apply presets like 8D Audio, Bass Boost, Nightcore, Vaporwave!`, ephemeral: true });
       }
+
+      if (interaction.customId === 'music_lyrics') {
+        await interaction.deferReply({ ephemeral: true });
+        const cur = queue.current;
+        if (!cur) return interaction.editReply('❌ No track is currently playing.');
+        const data = await lyricsService.getLyrics({ title: cur.title, artist: cur.author });
+        if (!data || !data.lyrics) {
+          return interaction.editReply(`❌ Could not find lyrics for **"${cur.title}"**.`);
+        }
+        const text = data.lyrics.length > 4000 ? data.lyrics.slice(0, 3990) + '\n\n*...[Lyrics truncated]*' : data.lyrics;
+        const embed = new EmbedBuilder()
+          .setColor(0x1db954)
+          .setTitle(`📜 Lyrics: ${data.title}`)
+          .setAuthor({ name: data.artist || 'Unknown Artist' })
+          .setDescription(text)
+          .setFooter({ text: 'Live Lyrics Engine • Powered by LRCLIB' })
+          .setTimestamp();
+        return interaction.editReply({ embeds: [embed] });
+      }
+
+      if (interaction.customId === 'music_autoplay') {
+        const isNowOn = musicManager.toggleAutoplay(interaction.guildId);
+        return interaction.reply({
+          content: `📻 **Endless Radio Mode:** ${isNowOn ? '🟢 **ENABLED** (Related tracks will queue automatically when queue ends!)' : '⚪ **DISABLED**'}`,
+          ephemeral: true
+        });
+      }
+
+      if (interaction.customId === 'music_vol_down') {
+        const curVol = queue.player.volume || 100;
+        const newVol = Math.max(10, curVol - 10);
+        queue.player.setVolume(newVol);
+        return interaction.reply({ content: `🔉 Volume lowered to **${newVol}%**`, ephemeral: true });
+      }
+
+      if (interaction.customId === 'music_vol_up') {
+        const curVol = queue.player.volume || 100;
+        const newVol = Math.min(150, curVol + 10);
+        queue.player.setVolume(newVol);
+        return interaction.reply({ content: `🔊 Volume raised to **${newVol}%**`, ephemeral: true });
+      }
+
+      if (interaction.customId === 'music_refresh') {
+        const info = musicManager.getNowPlayingDisplay(interaction.guildId);
+        if (!info) return interaction.reply({ content: '❌ Nothing is playing.', ephemeral: true });
+        return interaction.reply({ content: `🔄 Progress: \`${info.currentFormatted}\` / \`${info.totalFormatted}\` (${info.progressBar})`, ephemeral: true });
+      }
     }
   }
 
@@ -511,6 +560,97 @@ setInterval(async () => {
     }
   }
 }, 1800000);
+
+// 🎙️ VOICE CHANNEL XP & LEVELING ENGINE (Runs every 60s)
+setInterval(async () => {
+  if (!client.isReady()) return;
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const voiceChannels = guild.channels.cache.filter(c => c.type === ChannelType.GuildVoice);
+      for (const [, vc] of voiceChannels) {
+        const humans = vc.members.filter(m => !m.user.bot && !m.voice.deaf && !m.voice.serverDeaf);
+        const hasBotInVc = vc.members.has(client.user.id);
+        if (humans.size >= 2 || (humans.size >= 1 && hasBotInVc)) {
+          for (const [, member] of humans) {
+            const xpGain = Math.floor(Math.random() * 11) + 15; // 15-25 XP
+            const cashGain = Math.floor(Math.random() * 21) + 20; // 20-40 cash
+            db.addMoney(member.id, cashGain);
+            const { leveledUp, newLevel, reward } = db.addXp(member.id, xpGain);
+            if (leveledUp) {
+              const targetChannel = guild.systemChannel || guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('general') || c.name.includes('chat')));
+              targetChannel?.send(`🎉 **VOICE LEVEL UP!** GG <@${member.id}>, you just reached **Level ${newLevel}** by chilling in voice! 🎙️ Won a **₹${reward.toLocaleString('en-IN')}** cash bonus! 💰`).catch(() => {});
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore background errors
+    }
+  }
+}, 60000);
+
+// 👋 AESTHETIC WELCOMER & GOODBYE ENGINE
+client.on('guildMemberAdd', async (member) => {
+  if (member.user.bot) return;
+  const guild = member.guild;
+  const config = db.getWelcomeConfig(guild.id);
+
+  let targetChannel = null;
+  if (config?.channelId) {
+    targetChannel = guild.channels.cache.get(config.channelId);
+  } else {
+    targetChannel = guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('welcome') || c.name.includes('joins') || c.name.includes('general'))) || guild.systemChannel;
+  }
+
+  if (!targetChannel?.isTextBased()) return;
+
+  const joinSuffix = (n) => {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+
+  const welcomeEmbed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle(`🎉 Welcome to ${guild.name}!`)
+    .setDescription(`Hey <@${member.id}>, welcome aboard! We are super thrilled to have you here with us. ✨\n\nTake a look around, check out our channels, and say hi to the crew! 💬`)
+    .setThumbnail(member.user.displayAvatarURL({ size: 512, dynamic: true }))
+    .addFields(
+      { name: '👤 Member', value: `<@${member.id}> (\`${member.user.tag}\`)`, inline: true },
+      { name: '🏅 Member Count', value: `**${joinSuffix(guild.memberCount)}** member`, inline: true },
+      { name: '🗓️ Account Created', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true }
+    )
+    .setFooter({ text: `${guild.name} • Exclusive Community`, iconURL: guild.iconURL() || undefined })
+    .setTimestamp();
+
+  await targetChannel.send({ content: `👋 Welcome <@${member.id}>!`, embeds: [welcomeEmbed] }).catch(() => {});
+
+  if (config?.roleId) {
+    member.roles.add(config.roleId).catch(() => {});
+  }
+});
+
+client.on('guildMemberRemove', async (member) => {
+  if (member.user.bot) return;
+  const guild = member.guild;
+  const config = db.getWelcomeConfig(guild.id);
+
+  let targetChannel = null;
+  if (config?.channelId) {
+    targetChannel = guild.channels.cache.get(config.channelId);
+  } else {
+    targetChannel = guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('welcome') || c.name.includes('joins') || c.name.includes('goodbye'))) || guild.systemChannel;
+  }
+
+  if (!targetChannel?.isTextBased()) return;
+
+  const goodbyeEmbed = new EmbedBuilder()
+    .setColor(0x95a5a6)
+    .setDescription(`👋 **${member.user.tag}** has left the server. We wish them all the best! (We are now at **${guild.memberCount}** members)`)
+    .setTimestamp();
+
+  await targetChannel.send({ embeds: [goodbyeEmbed] }).catch(() => {});
+});
 
 // 🚀 READY EVENT
 client.once('clientReady', () => {

@@ -29,7 +29,8 @@ function initialData() {
     counting: {},
     birthdays: {},
     announcedBirthdays: {},
-    birthdayConfigs: {}
+    birthdayConfigs: {},
+    welcomeConfigs: {}
   };
 }
 
@@ -85,6 +86,7 @@ class DatabaseService {
       parsed.birthdays ??= {};
       parsed.announcedBirthdays ??= {};
       parsed.birthdayConfigs ??= {};
+      parsed.welcomeConfigs ??= {};
       return parsed;
     } catch (e) {
       console.error('[Database] Failed to load data, using default:', e);
@@ -430,6 +432,17 @@ class DatabaseService {
   getBirthdayConfig(guildId) {
     this.data.birthdayConfigs ??= {};
     return this.data.birthdayConfigs[guildId] || null;
+  }
+
+  setWelcomeConfig(guildId, config) {
+    this.data.welcomeConfigs ??= {};
+    this.data.welcomeConfigs[guildId] = config;
+    this.save();
+  }
+
+  getWelcomeConfig(guildId) {
+    this.data.welcomeConfigs ??= {};
+    return this.data.welcomeConfigs[guildId] || null;
   }
 }
 

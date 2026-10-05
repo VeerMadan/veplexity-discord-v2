@@ -104,26 +104,48 @@ const SAFE_FALLBACK_GIFS = {
   ]
 };
 
+const giphyCache = new Map(); // query -> { urls: string[], timestamp: number }
+
 class GifService {
   /**
-   * Search Giphy API (if GIPHY_API_KEY is configured in .env)
+   * Search Giphy API (if GIPHY_API_KEY is configured in .env) with 15-min smart caching
    */
   async searchGiphy(query) {
     const apiKey = process.env.GIPHY_API_KEY?.replace(/['"]/g, '').trim();
     if (!apiKey) return null;
 
+    const cacheKey = (query || '').toLowerCase().trim();
+    const cached = giphyCache.get(cacheKey);
+    const now = Date.now();
+
+    // 15-minute cache hit: pick random from previous batch
+    if (cached && (now - cached.timestamp < 15 * 60 * 1000) && cached.urls.length > 0) {
+      return cached.urls[Math.floor(Math.random() * cached.urls.length)];
+    }
+
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
+      const timeout = setTimeout(() => controller.abort(), 2500);
       const url = `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=25&rating=pg-13`;
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 
+      if (res.status === 429) {
+        console.warn('[GIPHY] Rate limit reached (100 calls/hr). Falling back smoothly to OtakuGIFs/Nekos.');
+        return null;
+      }
+
       if (res.ok) {
         const data = await res.json();
         if (data.data?.length > 0) {
-          const item = data.data[Math.floor(Math.random() * data.data.length)];
-          return item.images?.original?.url || item.images?.downsized?.url || null;
+          const urls = data.data
+            .map(item => item.images?.original?.url || item.images?.downsized?.url)
+            .filter(Boolean);
+
+          if (urls.length > 0) {
+            giphyCache.set(cacheKey, { urls, timestamp: now });
+            return urls[Math.floor(Math.random() * urls.length)];
+          }
         }
       }
     } catch (e) {
