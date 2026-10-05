@@ -150,7 +150,21 @@ export function createApiRouter(client) {
     });
   });
 
-  // ─── 3. LIVE MUSIC STUDIO & CONTROLLER ─────────────────────────────────────
+  // ─── 3. LOSSLESS STUDIO MASTER LIBRARY ─────────────────────────────────────
+  router.get('/music/library', requireApiKey, (req, res) => {
+    const search = req.query.search || '';
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const results = localLibrary.search(search, limit);
+
+    res.json({
+      totalCount: localLibrary.getTotalCount(),
+      returnedCount: results.length,
+      storageDir: localLibrary.musicDir,
+      tracks: results
+    });
+  });
+
+  // ─── 4. LIVE MUSIC STUDIO & CONTROLLER ─────────────────────────────────────
   router.get('/music/:guildId', requireApiKey, (req, res) => {
     const { guildId } = req.params;
     const guild = client.guilds.cache.get(guildId);
@@ -235,19 +249,6 @@ export function createApiRouter(client) {
     }
   });
 
-  // ─── 4. LOSSLESS STUDIO MASTER LIBRARY ─────────────────────────────────────
-  router.get('/music/library', requireApiKey, (req, res) => {
-    const search = req.query.search || '';
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
-    const results = localLibrary.search(search, limit);
-
-    res.json({
-      totalCount: localLibrary.getTotalCount(),
-      returnedCount: results.length,
-      storageDir: localLibrary.musicDir,
-      tracks: results
-    });
-  });
 
   router.post('/system/rescan', requireApiKey, (req, res) => {
     localLibrary.scan();
