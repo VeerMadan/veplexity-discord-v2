@@ -115,21 +115,36 @@ class LocalLibraryService {
       return this.songs.slice(0, limit);
     }
 
-    const clean = query.toLowerCase().trim();
+    const clean = query.toLowerCase().trim().replace(/[_\-]+/g, ' ');
+    const queryWords = clean.split(/\s+/).filter(w => w.length > 0);
 
     return this.songs
       .map(song => {
         const titleLower = song.title.toLowerCase();
         const authorLower = song.author.toLowerCase();
+        const fullCombo = `${authorLower} ${titleLower} ${path.basename(song.filePath).toLowerCase()}`;
         let score = 0;
 
-        if (titleLower === clean) score += 100;
-        else if (titleLower.startsWith(clean)) score += 60;
-        else if (titleLower.includes(clean)) score += 40;
+        // Exact matches
+        if (titleLower === clean) score += 120;
+        else if (titleLower.startsWith(clean)) score += 80;
+        else if (titleLower.includes(clean)) score += 50;
 
-        if (authorLower === clean) score += 80;
-        else if (authorLower.startsWith(clean)) score += 50;
-        else if (authorLower.includes(clean)) score += 30;
+        if (authorLower === clean) score += 90;
+        else if (authorLower.startsWith(clean)) score += 60;
+        else if (authorLower.includes(clean)) score += 40;
+
+        if (fullCombo.includes(clean)) score += 70;
+
+        // Multi-word token match (e.g. "Alan Walker On My Way")
+        if (queryWords.length > 1) {
+          const matchedWords = queryWords.filter(word => fullCombo.includes(word));
+          if (matchedWords.length === queryWords.length) {
+            score += 100;
+          } else if (matchedWords.length > 0) {
+            score += Math.round((matchedWords.length / queryWords.length) * 50);
+          }
+        }
 
         return { song, score };
       })

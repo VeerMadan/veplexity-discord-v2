@@ -286,16 +286,20 @@ class StreamResolverService {
   }
 
   async getDirectStreamUrl(track) {
-    if (track.searchQuery) return track.searchQuery;
-    if (track.title) return `${track.title} ${track.author || ''}`.trim();
-    if (track.url) return track.url;
+    if (track.filePath && fs.existsSync(track.filePath)) return track.filePath;
+    if (track.isLocal && track.url && fs.existsSync(track.url)) return track.url;
+    if (track.url && track.url.startsWith('http')) return track.url;
+    if (track.sourceUrl && track.sourceUrl.startsWith('http')) return track.sourceUrl;
+    if (track.searchQuery && track.searchQuery.startsWith('http')) return track.searchQuery;
+    if (track.searchQuery) return `ytsearch1:${track.searchQuery}`;
+    if (track.title) return `ytsearch1:${track.title} ${track.author || ''}`.trim();
     return null;
   }
 
   /**
    * Creates an AudioResource by:
    *  1. Direct FLAC / local studio library file OR extracting direct CDN audio URL via yt-dlp
-   *  2. Spawning FFmpeg to decode and encode directly to high-bitrate Opus (192kbps) in audio mode
+   *  2. Spawning FFmpeg to decode and encode directly to high-bitrate Opus (320kbps) with SoX resampler
    *  3. Using -page_duration 20000 so each 20ms frame is delivered with zero buffer burst/stutter
    *  4. Feeding into @discordjs/voice as StreamType.OggOpus with zero Node.js CPU overhead
    */
@@ -314,8 +318,8 @@ class StreamResolverService {
       inputSource = fs.existsSync(clean) ? clean : path.resolve(clean);
       console.log(`[StreamResolver] 🎵 Streaming local FLAC studio file: ${inputSource}`);
     } else {
-      const sourceTarget = clean.startsWith('http') ? clean : `scsearch1:${clean}`;
-      console.log(`[StreamResolver] Extracting audio URL for: ${sourceTarget.slice(0, 60)}`);
+      const sourceTarget = clean.startsWith('http') ? clean : (clean.startsWith('ytsearch') ? clean : `ytsearch1:${clean}`);
+      console.log(`[StreamResolver] Extracting official audio URL for: ${sourceTarget.slice(0, 60)}`);
       const raw = await this.ytDlp.execPromise([
         sourceTarget, '-f', 'ba/b', '--get-url', '--no-warnings'
       ]);
@@ -326,7 +330,7 @@ class StreamResolverService {
       }
       inputSource = audioUrl;
       isHttp = true;
-      console.log(`[StreamResolver] Got CDN URL: ${audioUrl.slice(0, 80)}...`);
+      console.log(`[StreamResolver] Got Official YouTube CDN URL: ${audioUrl.slice(0, 80)}...`);
     }
 
     const ffmpegArgs = [];
