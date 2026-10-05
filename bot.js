@@ -39,6 +39,7 @@ const client = new Client({
 });
 
 client.on('error', err => console.error(`[Discord Client Error] ${err.message}`));
+client.on('raw', d => musicManager.lavalink.sendRawData(d));
 
 // 🕵️ CAUGHT IN 4K: SNIPE & EDIT-SNIPE LISTENERS
 client.on('messageDelete', (message) => {
@@ -466,6 +467,7 @@ setInterval(async () => {
 
 // 🚀 READY EVENT
 client.once('clientReady', () => {
+  musicManager.init(client);
   console.log(`========================================`);
   console.log(`🤖 Logged in as: ${client.user.tag}`);
   console.log(`📡 Connected Guilds: ${client.guilds.cache.size}`);

@@ -1,367 +1,127 @@
-import {
-  joinVoiceChannel,
-  createAudioPlayer,
-  NoSubscriberBehavior,
-  AudioPlayerStatus,
-  VoiceConnectionStatus,
-  entersState,
-  getVoiceConnection,
-  generateDependencyReport
-} from '@discordjs/voice';
+import { LavalinkManager } from 'lavalink-client';
+import localLibrary from './LocalLibrary.js';
 import streamResolver from './StreamResolver.js';
-import { createProgressBar, formatMs } from '../../utils/helpers.js';
-
-// Log voice dependency report once at import time
-console.log('[Voice] Dependency report:\n' + generateDependencyReport());
-
-class GuildQueue {
-  constructor(manager, guildId, voiceChannel, textChannel) {
-    this.manager = manager;
-    this.guildId = guildId;
-    this.voiceChannel = voiceChannel;
-    this.textChannel = textChannel;
-    this.tracks = [];
-    this.current = null;
-    this.currentResource = null;
-    this.volume = 1.0;
-    this.repeatMode = 'off'; // 'off' | 'track' | 'queue'
-    this.is247 = false;
-    this.isPlaying = false;
-    this.isPaused = false;
-    this.startedAt = 0;
-    this.pausedAt = 0;
-    this.totalPausedDuration = 0;
-    this.idleTimer = null;
-
-    this.player = createAudioPlayer({
-      behaviors: {
-        noSubscriber: NoSubscriberBehavior.Pause,
-        maxMissedFrames: 50
-      }
-    });
-    this.connection = null;
-    this.setupListeners();
-  }
-
-  setupListeners() {
-    this.player.on(AudioPlayerStatus.Playing, () => {
-      console.log(`[MusicQueue ${this.guildId}] 🔊 Player: PLAYING`);
-    });
-
-    this.player.on(AudioPlayerStatus.Buffering, () => {
-      console.log(`[MusicQueue ${this.guildId}] ⏳ Player: BUFFERING`);
-    });
-
-    this.player.on(AudioPlayerStatus.AutoPaused, () => {
-      console.log(`[MusicQueue ${this.guildId}] ⏸️ Player: AUTOPAUSED (no active voice subscriber yet)`);
-    });
-
-    this.player.on(AudioPlayerStatus.Idle, () => {
-      console.log(`[MusicQueue ${this.guildId}] ⏹️ Player: IDLE`);
-      this.isPlaying = false;
-      this.cleanUpCurrentResource();
-
-      if (this.current) {
-        if (this.repeatMode === 'track') {
-          this.tracks.unshift(this.current);
-        } else if (this.repeatMode === 'queue') {
-          this.tracks.push(this.current);
-        }
-      }
-
-      this.current = null;
-      this.playNext();
-    });
-
-    this.player.on('error', error => {
-      console.error(`[MusicQueue ${this.guildId}] ❌ Player error:`, error.message);
-      this.isPlaying = false;
-      this.cleanUpCurrentResource();
-      this.current = null;
-      this.playNext();
-    });
-  }
-
-  cleanUpCurrentResource() {
-    if (this.currentResource?._ffmpegProc) {
-      try {
-        this.currentResource._ffmpegProc.stdout?.destroy();
-        this.currentResource._ffmpegProc.stderr?.destroy();
-        this.currentResource._ffmpegProc.kill('SIGKILL');
-      } catch {}
-    }
-    if (this.currentResource?.playStream) {
-      try { this.currentResource.playStream.destroy(); } catch {}
-    }
-    this.currentResource = null;
-  }
-
-  /**
-   * Joins the voice channel and waits until the connection is fully Ready
-   * before returning. This guarantees the UDP socket is open and audio
-   * packets will actually reach Discord.
-   */
-  async connect() {
-    // 1. If existing connection is already Ready, reuse it
-    if (this.connection && this.connection.state?.status === VoiceConnectionStatus.Ready) {
-      this.connection.subscribe(this.player);
-      return this.connection;
-    }
-
-    // 2. Check global voice connection registry and reuse if healthy
-    const existing = getVoiceConnection(this.guildId);
-    if (existing && existing.state.status !== VoiceConnectionStatus.Destroyed) {
-      this.connection = existing;
-      if (existing.state.status === VoiceConnectionStatus.Ready) {
-        this.connection.subscribe(this.player);
-        return this.connection;
-      }
-      try {
-        await entersState(this.connection, VoiceConnectionStatus.Ready, 10_000);
-        this.connection.subscribe(this.player);
-        return this.connection;
-      } catch (e) {
-        console.warn(`[MusicQueue ${this.guildId}] Existing connection failed to reach Ready, recreating.`);
-        try { existing.destroy(); } catch {}
-      }
-    }
-
-    console.log(`[MusicQueue ${this.guildId}] 🔌 Joining voice channel ${this.voiceChannel.id}...`);
-
-    // Auto-boost channel bitrate to server maximum for lossless audiophile music playback
-    try {
-      const maxBitrate = this.voiceChannel.guild?.maximumBitrate || 96000;
-      if (this.voiceChannel.bitrate < maxBitrate && this.voiceChannel.manageable) {
-        const oldBitrate = this.voiceChannel.bitrate;
-        await this.voiceChannel.setBitrate(maxBitrate, 'VePlexity Studio Music Auto-Boost');
-        console.log(`[MusicQueue ${this.guildId}] 🚀 Auto-boosted voice channel bitrate: ${oldBitrate / 1000}kbps -> ${maxBitrate / 1000}kbps`);
-      }
-    } catch (bitrateErr) {
-      console.warn(`[MusicQueue ${this.guildId}] Could not auto-boost channel bitrate:`, bitrateErr.message);
-    }
-
-    this.connection = joinVoiceChannel({
-      channelId: this.voiceChannel.id,
-      guildId: this.guildId,
-      adapterCreator: this.voiceChannel.guild.voiceAdapterCreator,
-      selfDeaf: true,
-      selfMute: false
-    });
-
-    this.connection.on('stateChange', (oldState, newState) => {
-      console.log(`[MusicQueue ${this.guildId}] 🔗 Voice: ${oldState.status} → ${newState.status}`);
-    });
-
-    this.connection.on('debug', (msg) => {
-      console.log(`[MusicQueue ${this.guildId}] [Voice Debug] ${msg}`);
-    });
-
-    this.connection.on('error', (err) => {
-      console.error(`[MusicQueue ${this.guildId}] [Voice Error]`, err);
-    });
-
-    this.connection.on(VoiceConnectionStatus.Disconnected, async () => {
-      try {
-        await Promise.race([
-          entersState(this.connection, VoiceConnectionStatus.Signalling, 5000),
-          entersState(this.connection, VoiceConnectionStatus.Connecting, 5000),
-        ]);
-      } catch {
-        if (!this.is247) this.destroy();
-      }
-    });
-
-    try {
-      await entersState(this.connection, VoiceConnectionStatus.Ready, 20_000);
-      console.log(`[MusicQueue ${this.guildId}] ✅ Voice connection READY`);
-    } catch (e) {
-      const status = this.connection?.state?.status || 'unknown';
-      console.warn(`[MusicQueue ${this.guildId}] ⚠️ Voice connection status after 20s: ${status}`);
-    }
-
-    if (this.connection && this.connection.state?.status !== VoiceConnectionStatus.Destroyed) {
-      this.connection.subscribe(this.player);
-      console.log(`[MusicQueue ${this.guildId}] 🎧 Player subscribed to voice connection`);
-    }
-
-    return this.connection;
-  }
-
-  async playNext(notify = true) {
-    if (this.tracks.length === 0) {
-      this.isPlaying = false;
-      this.current = null;
-      this.scheduleIdleDisconnect();
-      return;
-    }
-
-    this.clearIdleDisconnect();
-    const nextTrack = this.tracks.shift();
-    this.current = nextTrack;
-
-    try {
-      // Ensure voice connection is Ready before we start streaming
-      await this.connect();
-
-      console.log(`[MusicQueue ${this.guildId}] ▶️ Streaming: ${nextTrack.title} by ${nextTrack.author}`);
-      const streamQuery = await streamResolver.getDirectStreamUrl(nextTrack);
-      if (!streamQuery) {
-        this.textChannel?.send(`❌ Could not stream **${nextTrack.title}**, skipping...`).catch(() => null);
-        return this.playNext();
-      }
-
-      this.currentResource = await streamResolver.createAudioResource(streamQuery, this.volume);
-      this.player.play(this.currentResource);
-      console.log(`[MusicQueue ${this.guildId}] 🚀 player.play() dispatched`);
-      this.isPlaying = true;
-      this.isPaused = false;
-      this.startedAt = Date.now();
-      this.pausedAt = 0;
-      this.totalPausedDuration = 0;
-
-      if (this.textChannel && notify) {
-        this.textChannel.send(`🎶 Now playing: **${nextTrack.title}** by **${nextTrack.author}**`).catch(() => null);
-      }
-    } catch (err) {
-      console.error(`[MusicQueue ${this.guildId}] Play error:`, err);
-      this.textChannel?.send(`❌ Error playing **${nextTrack.title}**: ${err.message}`).catch(() => null);
-      this.cleanUpCurrentResource();
-      this.current = null;
-      this.playNext();
-    }
-  }
-
-  scheduleIdleDisconnect() {
-    if (this.is247) return;
-    this.clearIdleDisconnect();
-    this.idleTimer = setTimeout(() => {
-      if (!this.isPlaying && this.tracks.length === 0 && !this.is247) {
-        this.textChannel?.send('👋 Disconnecting from voice channel due to inactivity.').catch(() => null);
-        this.destroy();
-      }
-    }, 60000);
-  }
-
-  clearIdleDisconnect() {
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
-      this.idleTimer = null;
-    }
-  }
-
-  getCurrentPlaybackMs() {
-    if (!this.isPlaying || !this.startedAt) return 0;
-    if (this.isPaused) {
-      return (this.pausedAt - this.startedAt) - this.totalPausedDuration;
-    }
-    return (Date.now() - this.startedAt) - this.totalPausedDuration;
-  }
-
-  pause() {
-    if (this.isPaused || !this.isPlaying) return false;
-    const paused = this.player.pause();
-    if (paused) {
-      this.isPaused = true;
-      this.pausedAt = Date.now();
-    }
-    return paused;
-  }
-
-  resume() {
-    if (!this.isPaused) return false;
-    const unpaused = this.player.unpause();
-    if (unpaused) {
-      this.isPaused = false;
-      if (this.pausedAt) {
-        this.totalPausedDuration += Date.now() - this.pausedAt;
-        this.pausedAt = 0;
-      }
-    }
-    return unpaused;
-  }
-
-  skip() {
-    this.cleanUpCurrentResource();
-    this.player.stop();
-  }
-
-  stop() {
-    this.tracks = [];
-    this.cleanUpCurrentResource();
-    this.player.stop();
-    if (!this.is247) {
-      this.destroy();
-    }
-  }
-
-  async setVolume(level) {
-    this.volume = Math.max(0, Math.min(150, level)) / 100;
-    if (this.currentResource?.volume) {
-      this.currentResource.volume.setVolume(this.volume);
-    } else if (this.isPlaying && this.current) {
-      try {
-        const seekSec = Math.max(0, Math.floor(this.getCurrentPlaybackMs() / 1000));
-        const streamQuery = await streamResolver.getDirectStreamUrl(this.current);
-        if (streamQuery) {
-          this.cleanUpCurrentResource();
-          this.currentResource = await streamResolver.createAudioResource(streamQuery, this.volume, seekSec);
-          this.player.play(this.currentResource);
-          console.log(`[MusicQueue ${this.guildId}] 🔊 Volume updated to ${Math.round(this.volume * 100)}% (re-streamed from ${seekSec}s)`);
-        }
-      } catch (err) {
-        console.warn(`[MusicQueue ${this.guildId}] Volume hot-swap notice:`, err.message);
-      }
-    }
-  }
-
-  shuffle() {
-    for (let i = this.tracks.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [this.tracks[i], this.tracks[j]] = [this.tracks[j], this.tracks[i]];
-    }
-  }
-
-  destroy() {
-    this.clearIdleDisconnect();
-    this.cleanUpCurrentResource();
-    this.tracks = [];
-    this.current = null;
-    this.isPlaying = false;
-    this.isPaused = false;
-    try {
-      this.player.stop();
-    } catch (e) {}
-
-    const connection = getVoiceConnection(this.guildId) || this.connection;
-    if (connection) {
-      try {
-        connection.destroy();
-      } catch (e) {}
-    }
-    this.connection = null;
-    this.manager.queues.delete(this.guildId);
-  }
-}
+import { createProgressBar, formatMs, formatSeconds } from '../../utils/helpers.js';
 
 class MusicManager {
   constructor() {
-    this.queues = new Map();
+    this.client = null;
+    this.lavalink = new LavalinkManager({
+      nodes: [
+        {
+          authorization: process.env.LAVALINK_PASSWORD || 'V33r',
+          host: '127.0.0.1',
+          port: 2333,
+          id: 'main'
+        }
+      ],
+      sendToShard: (guildId, payload) => this.client?.guilds?.cache?.get(guildId)?.shard?.send(payload),
+      client: {
+        id: process.env.CLIENT_ID || '1470533218376613908',
+        username: 'VePlexity'
+      },
+      autoSkip: true,
+      playerOptions: {
+        defaultSearchPlatform: 'ytsearch',
+        onDisconnect: { autoReconnect: true, destroyPlayer: false },
+        onEmptyQueue: { destroyAfterMs: 60000 }
+      }
+    });
+
+    this.setupListeners();
+  }
+
+  init(discordClient) {
+    this.client = discordClient;
+    this.lavalink.init({
+      id: discordClient.user.id,
+      username: discordClient.user.username
+    });
+    console.log('[MusicManager] Initialized with client ID:', discordClient.user.id);
+  }
+
+  setupListeners() {
+    this.lavalink.nodeManager.on('connect', (node) => {
+      console.log(`[Lavalink] ✅ Connected to audio node: ${node.id}`);
+    });
+
+    this.lavalink.nodeManager.on('error', (node, err) => {
+      console.error(`[Lavalink] ❌ Node ${node.id} error:`, err.message);
+    });
+
+    this.lavalink.on('trackStart', (player, track) => {
+      console.log(`[Lavalink] 🔊 trackStart on guild ${player.guildId}: ${track.info.title}`);
+      if (player.textChannelId && this.client) {
+        const channel = this.client.channels.cache.get(player.textChannelId);
+        if (channel) {
+          const isLocal = track.info.sourceName === 'local';
+          const tag = isLocal ? '📁 [24-bit FLAC]' : '🌐 [YouTube]';
+          channel.send(`🎶 Now playing: **${track.info.title}** by **${track.info.author}** ${tag}`).catch(() => null);
+        }
+      }
+    });
+
+    this.lavalink.on('queueEnd', (player) => {
+      console.log(`[Lavalink] ⏹️ Queue ended on guild ${player.guildId}`);
+    });
+
+    this.lavalink.on('playerError', (player, error) => {
+      console.error(`[Lavalink] ❌ Player error on guild ${player.guildId}:`, error);
+    });
+  }
+
+  getPlayer(guildId) {
+    return this.lavalink.getPlayer(guildId) || null;
+  }
+
+  getOrCreatePlayer(guildId, voiceChannelId, textChannelId) {
+    let player = this.lavalink.getPlayer(guildId);
+    if (!player) {
+      player = this.lavalink.createPlayer({
+        guildId,
+        voiceChannelId,
+        textChannelId,
+        selfDeaf: true,
+        volume: 100
+      });
+    } else {
+      if (voiceChannelId) player.voiceChannelId = voiceChannelId;
+      if (textChannelId) player.textChannelId = textChannelId;
+    }
+    return player;
   }
 
   getQueue(guildId) {
-    return this.queues.get(guildId) || null;
-  }
+    const player = this.getPlayer(guildId);
+    if (!player) return null;
 
-  getOrCreateQueue(guildId, voiceChannel, textChannel) {
-    let queue = this.queues.get(guildId);
-    if (!queue) {
-      queue = new GuildQueue(this, guildId, voiceChannel, textChannel);
-      this.queues.set(guildId, queue);
-    } else {
-      if (voiceChannel) queue.voiceChannel = voiceChannel;
-      if (textChannel) queue.textChannel = textChannel;
-    }
-    return queue;
+    return {
+      player,
+      isPlaying: player.playing,
+      isPaused: player.paused,
+      current: player.queue.current ? {
+        title: player.queue.current.info.title,
+        author: player.queue.current.info.author,
+        url: player.queue.current.info.uri,
+        sourceUrl: player.queue.current.info.uri,
+        duration: formatSeconds(Math.round(player.queue.current.info.length / 1000)),
+        requestedBy: player.queue.current.requester
+      } : null,
+      tracks: (player.queue.tracks || []).map(t => ({
+        title: t.info.title,
+        author: t.info.author,
+        url: t.info.uri,
+        sourceUrl: t.info.uri,
+        duration: formatSeconds(Math.round(t.info.length / 1000)),
+        requestedBy: t.requester
+      })),
+      repeatMode: player.repeatMode || 'off',
+      pause: () => player.pause(),
+      resume: () => player.resume(),
+      skip: () => player.skip(),
+      stop: () => player.destroy(),
+      setVolume: (level) => player.setVolume(level)
+    };
   }
 
   async play(interaction, query) {
@@ -371,29 +131,68 @@ class MusicManager {
     }
 
     try {
-      const queue = this.getOrCreateQueue(interaction.guildId, voiceChannel, interaction.channel);
+      const player = this.getOrCreatePlayer(interaction.guildId, voiceChannel.id, interaction.channelId);
 
-      const tracks = await streamResolver.resolveTracks(query, interaction.user);
-      if (!tracks || tracks.length === 0) {
+      if (!player.connected) {
+        await player.connect();
+      }
+
+      const clean = (query || '').trim();
+      let res = null;
+
+      // 1. Check local FLAC master audio library
+      const songById = localLibrary.getSongById(clean);
+      const songByPath = localLibrary.getSongByPath(clean);
+      const isLocalPrefix = clean.toLowerCase().startsWith('local:') || clean.toLowerCase().startsWith('flac:');
+
+      if (songById) {
+        res = await player.search({ query: songById.filePath, source: 'local' }, interaction.user);
+      } else if (songByPath) {
+        res = await player.search({ query: songByPath.filePath, source: 'local' }, interaction.user);
+      } else if (isLocalPrefix) {
+        const cleanLocal = clean.replace(/^(local|flac):/i, '').trim();
+        const matches = localLibrary.search(cleanLocal, 1);
+        if (matches.length > 0) {
+          res = await player.search({ query: matches[0].filePath, source: 'local' }, interaction.user);
+        }
+      } else if (!clean.startsWith('http')) {
+        // High-confidence local match
+        const localMatches = localLibrary.search(clean, 1);
+        if (localMatches.length > 0 && localMatches[0].title.toLowerCase() === clean.toLowerCase()) {
+          res = await player.search({ query: localMatches[0].filePath, source: 'local' }, interaction.user);
+        }
+      }
+
+      // 2. Official YouTube / Web stream via Lavalink OAuth
+      if (!res || !res.tracks?.length) {
+        const ytQuery = clean.replace(/^(yt|youtube):/i, '').trim() || clean;
+        res = await player.search({ query: ytQuery }, interaction.user);
+      }
+
+      if (!res || !res.tracks?.length) {
         return interaction.editReply(`❌ No results found for: \`${query}\``);
       }
 
-      await queue.connect();
-
-      if (tracks.length === 1) {
-        const track = tracks[0];
-        queue.tracks.push(track);
-        if (!queue.isPlaying && !queue.isPaused) {
-          queue.playNext(false);
-          return interaction.editReply(`🎶 Now playing: **${track.title}** by **${track.author}** [${track.duration}]`);
-        }
-        return interaction.editReply(`📝 Enqueued (#${queue.tracks.length}): **${track.title}** (${track.duration})`);
+      if (res.loadType === 'playlist') {
+        await player.queue.add(res.tracks);
+        if (!player.playing && !player.paused) await player.play();
+        return interaction.editReply(`🎶 Enqueued playlist **${res.playlist?.title || 'Playlist'}** with **${res.tracks.length}** tracks!`);
       } else {
-        queue.tracks.push(...tracks);
-        if (!queue.isPlaying && !queue.isPaused) {
-          queue.playNext(false);
+        const track = res.tracks[0];
+        const isQueueEmpty = player.queue.tracks.length === 0 && !player.queue.current;
+        await player.queue.add(track);
+
+        if (!player.playing && !player.paused) {
+          await player.play();
         }
-        return interaction.editReply(`🎶 Enqueued **${tracks.length}** tracks from playlist! First up: **${tracks[0].title}**`);
+
+        const isLocal = track.info.sourceName === 'local';
+        const tag = isLocal ? '📁 [24-bit FLAC]' : '🌐 [YouTube]';
+        if (isQueueEmpty) {
+          return interaction.editReply(`🎶 Now playing: **${track.info.title}** by **${track.info.author}** ${tag}`);
+        } else {
+          return interaction.editReply(`📝 Enqueued (#${player.queue.tracks.length}): **${track.info.title}** ${tag}`);
+        }
       }
     } catch (err) {
       console.error('[MusicManager] Play command error:', err);
@@ -402,28 +201,28 @@ class MusicManager {
   }
 
   getNowPlayingDisplay(guildId) {
-    const queue = this.getQueue(guildId);
-    if (!queue || !queue.current) return null;
+    const player = this.getPlayer(guildId);
+    if (!player || !player.queue.current) return null;
 
-    const track = queue.current;
-    const currentMs = queue.getCurrentPlaybackMs();
-    const totalMs = (track.durationSec || 0) * 1000;
+    const track = player.queue.current;
+    const currentMs = player.position || 0;
+    const totalMs = track.info.length || 0;
     const bar = createProgressBar(currentMs, totalMs, 18);
 
     return {
-      title: track.title,
-      author: track.author,
-      duration: track.duration,
+      title: track.info.title,
+      author: track.info.author,
+      duration: formatSeconds(Math.round(totalMs / 1000)),
       currentFormatted: formatMs(currentMs),
       totalFormatted: formatMs(totalMs),
       progressBar: bar,
-      url: track.sourceUrl || track.url,
-      thumbnail: track.thumbnail,
-      requestedBy: track.requestedBy,
-      isPaused: queue.isPaused,
-      volume: Math.round(queue.volume * 100),
-      repeatMode: queue.repeatMode,
-      is247: queue.is247
+      url: track.info.uri,
+      thumbnail: track.info.artworkUrl || null,
+      requestedBy: track.requester,
+      isPaused: player.paused,
+      volume: player.volume,
+      repeatMode: player.repeatMode || 'off',
+      is247: false
     };
   }
 }
