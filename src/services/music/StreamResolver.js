@@ -92,20 +92,6 @@ class StreamResolverService {
       }
     } catch (srErr) {}
 
-    // 3. Fast yt-dlp --print fallback (~1.6s)
-    try {
-      if (this.ytDlp) {
-        const results = await this._searchYtDlpFast(cleanQuery, limit);
-        if (results && results.length > 0) {
-          if (!this._searchCache) this._searchCache = new Map();
-          this._searchCache.set(cacheKey, { timestamp: Date.now(), results });
-          return results;
-        }
-      }
-    } catch (ytErr) {
-      console.error('[StreamResolver] Fast yt-dlp search error:', ytErr.message);
-    }
-
     return [];
   }
 
