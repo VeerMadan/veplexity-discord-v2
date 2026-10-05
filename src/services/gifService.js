@@ -158,13 +158,37 @@ class GifService {
   }
 
   /**
-   * Fetch a completely dynamic, non-hardcoded anime reaction GIF from Nekos.best (zero API key needed)
+   * Fetch a dynamic anime reaction GIF from OtakuGIFs (46+ endpoints, accessible everywhere including cloud VMs)
+   */
+  async fetchOtakuGifs(endpoint) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`https://api.otakugifs.xyz/gif?reaction=${encodeURIComponent(endpoint)}`, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) return data.url;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  /**
+   * Fetch a dynamic anime reaction GIF from Nekos.best (zero API key needed)
    */
   async fetchNekos(endpoint) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`https://nekos.best/api/v2/${endpoint}`, { signal: controller.signal });
+      const timeout = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch(`https://nekos.best/api/v2/${endpoint}`, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+      });
       clearTimeout(timeout);
 
       if (res.ok) {
@@ -178,27 +202,30 @@ class GifService {
   }
 
   /**
-   * Universal GIF Search: Matches query dynamically across Giphy, Tenor, and Nekos.best
+   * Universal GIF Search: Matches query dynamically across Giphy, Tenor, OtakuGIFs, and Nekos.best
    */
   async searchGif(query, fallbackCategory = 'laugh') {
     const cleanQuery = (query || '').trim();
     if (!cleanQuery) return this.getFallbackGif(fallbackCategory);
 
-    // 1. Try Live Giphy Search (if key provided)
+    // 1. Try Live Giphy Search (if key provided in .env)
     const giphyGif = await this.searchGiphy(cleanQuery);
     if (giphyGif) return giphyGif;
 
-    // 2. Try Live Tenor Search (if key provided)
+    // 2. Try Live Tenor Search (if key provided in .env)
     const tenorGif = await this.searchTenor(cleanQuery);
     if (tenorGif) return tenorGif;
 
-    // 3. Dynamic Zero-Key Nekos.best Semantic Resolution
-    const nekosCategory = this.resolveSemanticCategory(cleanQuery, fallbackCategory);
-    const nekosGif = await this.fetchNekos(nekosCategory);
+    // 3. Dynamic Zero-Key Reaction Engines (OtakuGIFs & Nekos.best)
+    const category = this.resolveSemanticCategory(cleanQuery, fallbackCategory);
+    const otakuGif = await this.fetchOtakuGifs(category);
+    if (otakuGif) return otakuGif;
+
+    const nekosGif = await this.fetchNekos(category);
     if (nekosGif) return nekosGif;
 
     // 4. Safe fallback pool
-    return this.getFallbackGif(nekosCategory);
+    return this.getFallbackGif(category);
   }
 
   /**
@@ -215,9 +242,12 @@ class GifService {
       }
     }
 
-    const endpoint = ACTION_ENDPOINT_MAP[clean] || (NEKOS_ENDPOINTS.includes(clean) ? clean : 'hug');
-    const gif = await this.fetchNekos(endpoint);
-    if (gif) return gif;
+    const endpoint = ACTION_ENDPOINT_MAP[clean] || clean || 'hug';
+    const otakuGif = await this.fetchOtakuGifs(endpoint);
+    if (otakuGif) return otakuGif;
+
+    const nekosGif = await this.fetchNekos(endpoint);
+    if (nekosGif) return nekosGif;
 
     return this.getFallbackGif(clean);
   }
