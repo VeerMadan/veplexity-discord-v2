@@ -25,14 +25,17 @@ const rest = new REST({ version: '10' }).setToken(TOKEN);
     console.log(`- CLIENT_ID: ${CLIENT_ID}`);
     console.log(`- GUILD_ID: ${GUILD_ID || '(Global registration)'}`);
 
+    // If GUILD_ID is specified, clear guild-specific commands so they NEVER duplicate global commands!
     if (GUILD_ID) {
+      console.log(`🧹 Clearing guild-specific commands for ${GUILD_ID} to prevent duplicates...`);
       await rest.put(
         Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-        { body: commandsData }
+        { body: [] }
       );
-      console.log(`✅ Successfully registered ${commandsData.length} guild commands to guild ${GUILD_ID}!`);
+      console.log(`✅ Cleared guild-specific commands from guild ${GUILD_ID}!`);
     }
 
+    console.log(`🌍 Registering ${commandsData.length} global slash commands...`);
     await rest.put(
       Routes.applicationCommands(CLIENT_ID),
       { body: commandsData }

@@ -13,6 +13,7 @@ import { generateAiReply } from './src/services/aiService.js';
 import { deletedMessages, editedMessages } from './src/services/snipeService.js';
 import gifService from './src/services/gifService.js';
 import lyricsService from './src/services/music/LyricsService.js';
+import sendLyricsPagination from './src/utils/lyricsPaginator.js';
 
 // 🔧 Network & Process Configuration
 if (ffmpeg) process.env.FFMPEG_PATH = ffmpeg;
@@ -292,15 +293,7 @@ client.on('interactionCreate', async (interaction) => {
         if (!data || !data.lyrics) {
           return interaction.editReply(`❌ Could not find lyrics for **"${cur.title}"**.`);
         }
-        const text = data.lyrics.length > 4000 ? data.lyrics.slice(0, 3990) + '\n\n*...[Lyrics truncated]*' : data.lyrics;
-        const embed = new EmbedBuilder()
-          .setColor(0x1db954)
-          .setTitle(`📜 Lyrics: ${data.title}`)
-          .setAuthor({ name: data.artist || 'Unknown Artist' })
-          .setDescription(text)
-          .setFooter({ text: 'Live Lyrics Engine • Powered by LRCLIB' })
-          .setTimestamp();
-        return interaction.editReply({ embeds: [embed] });
+        return sendLyricsPagination(interaction, data);
       }
 
       if (interaction.customId === 'music_autoplay') {

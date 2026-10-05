@@ -4,6 +4,7 @@ import streamResolver from '../../services/music/StreamResolver.js';
 import localLibrary from '../../services/music/LocalLibrary.js';
 import lyricsService from '../../services/music/LyricsService.js';
 import { buildEmbed } from '../../utils/embeds.js';
+import { sendLyricsPagination } from '../../utils/lyricsPaginator.js';
 
 // ─── HELPER: MUSIC CONTROLS BUTTON ROWS ──────────────────────────────────────
 function createMusicControlsRow(isPaused = false, isAutoplay = false) {
@@ -444,16 +445,6 @@ export const lyrics = {
       return interaction.editReply(`❌ Could not find lyrics for **"${query}"**.`);
     }
 
-    const text = data.lyrics.length > 4000 ? data.lyrics.slice(0, 3990) + '\n\n*...[Lyrics truncated]*' : data.lyrics;
-
-    const embed = new EmbedBuilder()
-      .setColor(0x1db954)
-      .setTitle(`📜 Lyrics: ${data.title}`)
-      .setAuthor({ name: data.artist || 'Unknown Artist' })
-      .setDescription(text)
-      .setFooter({ text: 'Live Lyrics Engine • Powered by LRCLIB' })
-      .setTimestamp();
-
-    return interaction.editReply({ embeds: [embed] });
+    return sendLyricsPagination(interaction, data);
   }
 };

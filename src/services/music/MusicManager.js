@@ -89,6 +89,26 @@ class MusicManager {
       }
     });
 
+    this.lavalink.on('trackEnd', (player, track, payload) => {
+      console.log(`[Lavalink] ⏹️ trackEnd on guild ${player.guildId}: ${track?.info?.title || 'Unknown'} (Reason: ${payload?.reason})`);
+    });
+
+    this.lavalink.on('trackError', (player, track, payload) => {
+      console.error(`[Lavalink] ❌ trackError on guild ${player.guildId}: ${track?.info?.title}`, payload);
+      if (player.textChannelId && this.client) {
+        const channel = this.client.channels.cache.get(player.textChannelId);
+        channel?.send(`❌ Playback error for **${track?.info?.title || 'track'}**: \`${payload?.exception?.message || payload?.error || 'Audio stream failure'}\``).catch(() => null);
+      }
+    });
+
+    this.lavalink.on('trackStuck', (player, track, payload) => {
+      console.error(`[Lavalink] ⚠️ trackStuck on guild ${player.guildId}: ${track?.info?.title}`, payload);
+    });
+
+    this.lavalink.on('playerSocketClosed', (player, payload) => {
+      console.warn(`[Lavalink] 🔌 playerSocketClosed on guild ${player.guildId}: code ${payload?.code}, reason: ${payload?.reason}`);
+    });
+
     this.lavalink.on('playerError', (player, error) => {
       console.error(`[Lavalink] ❌ Player error on guild ${player.guildId}:`, error);
     });
